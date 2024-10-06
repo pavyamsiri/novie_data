@@ -1,0 +1,28 @@
+[project]
+name = "novie-data"
+version = "0.1.0"
+description = "Data type definitions for `novie` files."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "h5py>=3.12.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pyright]
+exclude = [".venv"]
+venvPath = "."
+venv = ".venv"
+pythonPlatform = "All"
+typeCheckingMode = "strict"
+deprecateTypingAliases = true
+enableTypeIgnoreComments = false
+reportIgnoreCommentWithoutRule = true
+reportImplicitRelativeImport = true
+reportInvalidCast = true
+reportPrivateUsage = true
+reportUnnecessaryTypeIgnoreComment = true
+reportUnsafeMultipleInheritance = true

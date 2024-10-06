@@ -26,3 +26,10 @@ reportInvalidCast = true
 reportPrivateUsage = true
 reportUnnecessaryTypeIgnoreComment = true
 reportUnsafeMultipleInheritance = true
+
+[tool.ruff]
+line-length = 130
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["ANN101", "ANN102", "COM812", "D203", "D213", "ISC001", "PLR0913", "PLR0915", "PLR2004", "S101", "TD003"]

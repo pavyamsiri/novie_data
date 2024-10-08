@@ -34,3 +34,5 @@ __all__ = [
     "PerturberData",
     "RidgeData",
 ]
+
+__version__: str = "0.2.0"

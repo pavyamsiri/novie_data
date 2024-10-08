@@ -11,7 +11,7 @@ from h5py import File as Hdf5File
 from numpy import float32, int8, int16
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
@@ -71,10 +71,8 @@ class GlobalSpiralData:
             The HDF5 file to read from.
 
         """
-        overall_pitch_angles: NDArray[float32]
-        overall_pitch_angles = read_dataset_from_hdf5(in_file, "overall_pitch_angles")
-        winding_directions: NDArray[int8]
-        winding_directions = read_dataset_from_hdf5(in_file, "winding_directions")
+        overall_pitch_angles = read_dataset_from_hdf5_with_dtype(in_file, "overall_pitch_angles", dtype=float32)
+        winding_directions = read_dataset_from_hdf5_with_dtype(in_file, "winding_directions", dtype=int8)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
         return cls(overall_pitch_angles=overall_pitch_angles, winding_directions=winding_directions)
@@ -180,20 +178,13 @@ class ClusterData:
             The HDF5 file to read from.
 
         """
-        arc_bounds: NDArray[float32]
-        arc_bounds = read_dataset_from_hdf5(in_file, "arc_bounds")
-        offset: NDArray[float32]
-        offset = read_dataset_from_hdf5(in_file, "offset")
-        growth_factor: NDArray[float32]
-        growth_factor = read_dataset_from_hdf5(in_file, "growth_factor")
-        initial_radius: NDArray[float32]
-        initial_radius = read_dataset_from_hdf5(in_file, "initial_radius")
-        cluster_fit_errors: NDArray[float32]
-        cluster_fit_errors = read_dataset_from_hdf5(in_file, "cluster_fit_errors")
-        is_two_revolution: NDArray[np.bool_]
-        is_two_revolution = read_dataset_from_hdf5(in_file, "is_two_revolution")
-        num_clusters: NDArray[int16]
-        num_clusters = read_dataset_from_hdf5(in_file, "num_clusters")
+        arc_bounds = read_dataset_from_hdf5_with_dtype(in_file, "arc_bounds", dtype=float32)
+        offset = read_dataset_from_hdf5_with_dtype(in_file, "offset", dtype=float32)
+        growth_factor = read_dataset_from_hdf5_with_dtype(in_file, "growth_factor", dtype=float32)
+        initial_radius = read_dataset_from_hdf5_with_dtype(in_file, "initial_radius", dtype=float32)
+        cluster_fit_errors = read_dataset_from_hdf5_with_dtype(in_file, "cluster_fit_errors", dtype=float32)
+        is_two_revolution = read_dataset_from_hdf5_with_dtype(in_file, "is_two_revolution", dtype=np.bool_)
+        num_clusters = read_dataset_from_hdf5_with_dtype(in_file, "num_clusters", dtype=int16)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
         return cls(
@@ -282,8 +273,7 @@ class SpiralClusterData:
             verify_file_version_from_hdf5(file, cls.VERSION)
 
             # Arrays
-            cluster_masks: NDArray[int16]
-            cluster_masks = read_dataset_from_hdf5(file, "cluster_masks")
+            cluster_masks = read_dataset_from_hdf5_with_dtype(file, "cluster_masks", dtype=int16)
             pixel_to_distance: float = get_float_attr_from_hdf5(file, "pixel_to_distance")
 
             snapshot_data = SnapshotData.load_from(file)
@@ -476,7 +466,7 @@ class ClusterFrame:
             [current_frame.initial_radius for current_frame in frames], axis=-1, dtype=float32
         )
         is_two_revolution: NDArray[np.bool_] = np.stack(
-            [current_frame.is_two_revolution for current_frame in frames], axis=-1, dtype=float32
+            [current_frame.is_two_revolution for current_frame in frames], axis=-1, dtype=np.bool_
         )
         errors: NDArray[float32] = np.stack([current_frame.errors for current_frame in frames], axis=-1, dtype=float32)
         num_clusters: NDArray[int16] = np.stack([current_frame.num_clusters for current_frame in frames], axis=-1, dtype=int16)

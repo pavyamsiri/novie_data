@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from pathlib import Path
+from typing import TYPE_CHECKING, Self, cast
 
 import numpy as np
+from numpy import float32
 
-from .serde.accessors import get_and_read_dataset_from_hdf5, get_string_sequence_from_hdf5
+from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from h5py import File as Hdf5File
-    from numpy import float32
     from numpy.typing import NDArray
 
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class SnapshotData:
     """The data that is general to a collection of snapshots.
 
@@ -34,12 +33,18 @@ class SnapshotData:
 
     """
 
-    names: Sequence[str]
-    times: NDArray[float32]
+    def __init__(self, names: Sequence[str], times: NDArray[float32]) -> None:
+        """Initialize the snapshot data.
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        times_dimension = len(self.times.shape)
+        Parameters
+        ----------
+        names : Sequence[str]
+            The names of each snapshot.
+        times : NDArray[float32]
+            The time associated with each snapshot in Myr.
+
+        """
+        times_dimension = len(cast(tuple[int], times.shape))
         if times_dimension != 1:
             msg = f"Expected `times` to be a 1D array but it is {times_dimension}D instead!"
             raise ValueError(msg)
@@ -50,6 +55,8 @@ class SnapshotData:
             msg = f"The number of times {num_times} is not equal to the number of snapshot names {num_names}!"
             raise ValueError(msg)
 
+        self.names: Sequence[str] = names
+        self.times: NDArray[float32] = times
         self.num_frames: int = num_times
 
     def dump_into(self, out_file: Hdf5File) -> None:
@@ -62,9 +69,13 @@ class SnapshotData:
 
         """
         # General
-        out_file.create_dataset("snapshot_names", data=self.names)
-        out_file.create_dataset("times", data=self.times)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        _ = out_file.create_dataset("snapshot_names", data=self.names)
+        _ = out_file.create_dataset("times", data=self.times)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -77,7 +88,7 @@ class SnapshotData:
 
         """
         snapshot_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "snapshot_names")
-        times, _ = get_and_read_dataset_from_hdf5(in_file, "times")
+        times = read_dataset_from_hdf5_with_dtype(in_file, "times", dtype=float32)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
         return cls(

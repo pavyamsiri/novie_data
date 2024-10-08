@@ -1,12 +1,10 @@
 [project]
 name = "novie-data"
-version = "0.1.0"
+version = "0.2.0"
 description = "Data type definitions for `novie` files."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "h5py>=3.12.1",
-]
+dependencies = ["h5py>=3.12.1", "numpy>=2.1.2", "packaging>=24.1"]
 
 [build-system]
 requires = ["hatchling"]
@@ -32,4 +30,23 @@ line-length = 130
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["ANN101", "ANN102", "COM812", "D203", "D213", "ISC001", "PLR0913", "PLR0915", "PLR2004", "S101", "TD003"]
+ignore = [
+    "ANN101",
+    "ANN102",
+    "COM812",
+    "D203",
+    "D213",
+    "ISC001",
+    "PLR0913",
+    "PLR0915",
+    "PLR2004",
+    "S101",
+    "TD003",
+]
+
+[tool.uv]
+dev-dependencies = ["h5py-stubs", "scipy-stubs"]
+
+[tool.uv.sources]
+scipy-stubs = { git = "https://github.com/jorenham/scipy-stubs.git" }
+h5py-stubs = { git = "https://github.com/pavyamsiri/h5py-stubs.git" }

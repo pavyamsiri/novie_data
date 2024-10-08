@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from h5py import File as Hdf5File
+from numpy import float32
 from packaging.version import Version
 
 from .neighbourhood_data import SphericalNeighbourhoodData
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
@@ -18,7 +19,6 @@ from .solar_circle_data import SolarCircleData
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy import float32
     from numpy.typing import NDArray
 
 
@@ -128,12 +128,9 @@ class WrinkleData:
             max_lz: float = get_float_attr_from_hdf5(file, "max_lz")
 
             # Projections
-            angular_momentum: NDArray[float32]
-            angular_momentum = read_dataset_from_hdf5(file, "angular_momentum")
-            mean_radial_velocity: NDArray[float32]
-            mean_radial_velocity = read_dataset_from_hdf5(file, "mean_radial_velocity")
-            mean_radial_velocity_error: NDArray[float32]
-            mean_radial_velocity_error = read_dataset_from_hdf5(file, "mean_radial_velocity_error")
+            angular_momentum = read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=float32)
+            mean_radial_velocity = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=float32)
+            mean_radial_velocity_error = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=float32)
 
             solar_circle_data = SolarCircleData.load_from(file)
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)

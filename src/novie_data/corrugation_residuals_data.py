@@ -11,7 +11,7 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5
+from .serde.accessors import read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
@@ -99,16 +99,11 @@ class CorrugationResidualsData:
             verify_file_version_from_hdf5(file, cls.VERSION)
 
             # Arrays
-            residuals: NDArray[float32]
-            residuals = read_dataset_from_hdf5(file, "residuals")
-            sum_of_square_residuals: NDArray[float32]
-            sum_of_square_residuals = read_dataset_from_hdf5(file, "sum_of_square_residuals")
-            relative_errors: NDArray[float32]
-            relative_errors = read_dataset_from_hdf5(file, "relative_errors")
-            mean_absolute_relative_error: NDArray[float32]
-            mean_absolute_relative_error = read_dataset_from_hdf5(file, "mean_absolute_relative_error")
-            radii: NDArray[float32]
-            radii = read_dataset_from_hdf5(file, "radii")
+            residuals = read_dataset_from_hdf5_with_dtype(file, "residuals", dtype=float32)
+            sum_of_square_residuals = read_dataset_from_hdf5_with_dtype(file, "sum_of_square_residuals", dtype=float32)
+            relative_errors = read_dataset_from_hdf5_with_dtype(file, "relative_errors", dtype=float32)
+            mean_absolute_relative_error = read_dataset_from_hdf5_with_dtype(file, "mean_absolute_relative_error", dtype=float32)
+            radii = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
 
             snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())

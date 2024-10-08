@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 import numpy as np
 from h5py import Dataset as Hdf5Dataset
 from h5py import File as Hdf5File
 
+from novie_data._type_utils import AnyArray, AnyArrayWithDType, require_dtype
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from numpy.typing import NDArray
+
+_ST = TypeVar("_ST", bound=np.generic)
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[NDArray[Any], Hdf5Dataset]:
+def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[AnyArray, Hdf5Dataset]:
     """Read a dataset from a hdf5 file.
 
     Parameters
@@ -29,7 +33,7 @@ def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[NDArray[A
 
     Returns
     -------
-    array : NDArray[Any]
+    array : NDArray
         The dataset's array data.
     dataset : h5py.Dataset
         The dataset.
@@ -44,7 +48,29 @@ def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[NDArray[A
     return array, value
 
 
-def read_dataset_from_hdf5(file: Hdf5File, name: str) -> NDArray[Any]:
+def read_dataset_from_hdf5_with_dtype(file: Hdf5File, name: str, *, dtype: type[_ST]) -> AnyArrayWithDType[_ST]:
+    """Read a dataset from a hdf5 file.
+
+    Parameters
+    ----------
+    file : h5py.File
+        The hdf5 file to read from.
+    name : str
+        The name of the dataset to read from.
+    dtype : dtype[T]
+        The data type to convert to.
+
+    Returns
+    -------
+    array : NDArray[T]
+        The dataset's array data.
+
+    """
+    array, _ = get_and_read_dataset_from_hdf5(file, name)
+    return require_dtype(array, dtype)
+
+
+def read_dataset_from_hdf5(file: Hdf5File, name: str) -> AnyArray:
     """Read a dataset from a hdf5 file.
 
     Parameters
@@ -56,7 +82,7 @@ def read_dataset_from_hdf5(file: Hdf5File, name: str) -> NDArray[Any]:
 
     Returns
     -------
-    array : NDArray[Any]
+    array : NDArray
         The dataset's array data.
 
     """
@@ -64,7 +90,7 @@ def read_dataset_from_hdf5(file: Hdf5File, name: str) -> NDArray[Any]:
     return array
 
 
-def get_array_from_hdf5_attrs(dataset: Hdf5Dataset, name: str) -> NDArray[Any]:
+def get_array_from_hdf5_attrs(dataset: Hdf5Dataset, name: str) -> AnyArray:
     """Return an NDArray which is an attribute of a dataset.
 
     Parameters
@@ -76,15 +102,13 @@ def get_array_from_hdf5_attrs(dataset: Hdf5Dataset, name: str) -> NDArray[Any]:
 
     Returns
     -------
-    array : NDArray[Any]
+    array : NDArray
         The attribute array.
 
     """
     value = dataset.attrs[name]
-    if not isinstance(value, np.ndarray):
-        msg = f"The `{name}` attribute is not an array of {dataset}!"
-        raise TypeError(msg)
-    return value
+    msg = f"The `{name}` attribute is not an array of {dataset}!"
+    return _verify_ndarray(value, msg)
 
 
 def get_string_sequence_from_hdf5(file: Hdf5File, name: str) -> Sequence[str]:
@@ -148,3 +172,9 @@ def get_float_attr_from_hdf5(file: Hdf5File, name: str) -> float:
     """
     value = file.attrs[name]
     return float(cast(float, value))
+
+
+def _verify_ndarray(arr: object, msg: str) -> AnyArray:
+    if not isinstance(arr, np.ndarray):
+        raise TypeError(msg)
+    return cast(AnyArray, arr)

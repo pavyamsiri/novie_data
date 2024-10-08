@@ -11,7 +11,7 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
@@ -338,15 +338,11 @@ class CorrugationData:
             verify_file_version_from_hdf5(file, cls.VERSION)
 
             # Projections
-            projection_rz: NDArray[float32]
-            projection_rz = read_dataset_from_hdf5(file, "projection_rz")
+            projection_rz = read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=float32)
             # Mean height
-            radii: NDArray[float32]
-            radii = read_dataset_from_hdf5(file, "radii")
-            mean_height: NDArray[float32]
-            mean_height = read_dataset_from_hdf5(file, "mean_height")
-            mean_height_error: NDArray[float32]
-            mean_height_error = read_dataset_from_hdf5(file, "mean_height_error")
+            radii = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
+            mean_height = read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=float32)
+            mean_height_error = read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=float32)
             snapshot_data = SnapshotData.load_from(file)
             radial_bins = RadialBinningData.load_from(file)
             height_bins = HeightBinningData.load_from(file)

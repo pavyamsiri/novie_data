@@ -11,7 +11,7 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
@@ -175,15 +175,11 @@ class SurfaceDensityData:
             num_bins: int = get_int_attr_from_hdf5(file, "num_bins")
 
             # Projections
-            projection_xy: NDArray[float32]
-            projection_xy = read_dataset_from_hdf5(file, "projection_xy")
-            projection_xz: NDArray[float32]
-            projection_xz = read_dataset_from_hdf5(file, "projection_xz")
-            projection_yz: NDArray[float32]
-            projection_yz = read_dataset_from_hdf5(file, "projection_yz")
+            projection_xy = read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=float32)
+            projection_xz = read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=float32)
+            projection_yz = read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=float32)
 
-            flat_projection_xy: NDArray[float32]
-            flat_projection_xy = read_dataset_from_hdf5(file, "flat_projection_xy")
+            flat_projection_xy = read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=float32)
 
             disc_profile = ExponentialDiscProfileData.load_from(file)
             snapshot_data = SnapshotData.load_from(file)
@@ -260,7 +256,7 @@ class SurfaceDensityData:
         min_xy = np.nanmin(self.projection_xy[self.projection_xy > 0])
         min_xz = np.nanmin(self.projection_xz[self.projection_xz > 0])
         min_yz = np.nanmin(self.projection_yz[self.projection_yz > 0])
-        return float(min(min_xy, min_xz, min_yz))
+        return float(np.min([min_xy, min_xz, min_yz]))
 
     def get_min_flat_density(self) -> float:
         """Return the minimum (non-zero) flattened density in the xy projection.
@@ -285,7 +281,7 @@ class SurfaceDensityData:
         max_xy = np.nanmax(self.projection_xy)
         max_xz = np.nanmax(self.projection_xz)
         max_yz = np.nanmax(self.projection_yz)
-        return float(max(max_xy, max_xz, max_yz))
+        return float(np.max([max_xy, max_xz, max_yz]))
 
     def get_max_flat_density(self) -> float:
         """Return the maximum (non-zero) flattened density in the xy projection.

@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
+from numpy import float32, uint32
 from packaging.version import Version
 
-from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from numpy import uint32
     from numpy.typing import NDArray
 
 
@@ -111,12 +110,11 @@ class SpiralArmCoverageData:
             verify_file_type_from_hdf5(in_file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(in_file, cls.VERSION)
 
-            num_covered_arm_pixels: NDArray[uint32]
-            num_covered_arm_pixels = read_dataset_from_hdf5(in_file, "num_covered_arm_pixels")
-            num_total_arm_pixels: NDArray[uint32]
-            num_total_arm_pixels = read_dataset_from_hdf5(in_file, "num_total_arm_pixels")
-            covered_arm_normalised_densities: NDArray[float32]
-            covered_arm_normalised_densities = read_dataset_from_hdf5(in_file, "covered_arm_normalised_densities")
+            num_covered_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_covered_arm_pixels", dtype=uint32)
+            num_total_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_total_arm_pixels", dtype=uint32)
+            covered_arm_normalised_densities = read_dataset_from_hdf5_with_dtype(
+                in_file, "covered_arm_normalised_densities", dtype=float32
+            )
             arm_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "arm_names")
             snapshot_data = SnapshotData.load_from(in_file)
             solar_circle_data = SolarCircleData.load_from(in_file)

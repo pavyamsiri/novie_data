@@ -7,16 +7,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from h5py import File as Hdf5File
+from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5
+from .serde.accessors import read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy import float32
     from numpy.typing import NDArray
 
 
@@ -80,12 +80,9 @@ class PerturberData:
             verify_file_version_from_hdf5(file, cls.VERSION)
 
             # Projections
-            position: NDArray[float32]
-            position = read_dataset_from_hdf5(file, "position")
-            velocity: NDArray[float32]
-            velocity = read_dataset_from_hdf5(file, "velocity")
-            mass: NDArray[float32]
-            mass = read_dataset_from_hdf5(file, "mass")
+            position = read_dataset_from_hdf5_with_dtype(file, "position", dtype=float32)
+            velocity = read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=float32)
+            mass = read_dataset_from_hdf5_with_dtype(file, "mass", dtype=float32)
             snapshot_data = SnapshotData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())

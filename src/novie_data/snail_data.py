@@ -15,7 +15,7 @@ from packaging.version import Version
 from scipy.ndimage import gaussian_filter
 
 from .neighbourhood_data import SphericalNeighbourhoodData
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
@@ -187,12 +187,9 @@ class SnailData:
             max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
 
             # Arrays
-            surface_density: NDArray[float32]
-            surface_density = read_dataset_from_hdf5(file, "surface_density")
-            azimuthal_velocity: NDArray[float32]
-            azimuthal_velocity = read_dataset_from_hdf5(file, "azimuthal_velocity")
-            radial_velocity: NDArray[float32]
-            radial_velocity = read_dataset_from_hdf5(file, "radial_velocity")
+            surface_density = read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=float32)
+            azimuthal_velocity = read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=float32)
+            radial_velocity = read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=float32)
 
             snapshot_data = SnapshotData.load_from(file)
             solar_circle_data = SolarCircleData.load_from(file)

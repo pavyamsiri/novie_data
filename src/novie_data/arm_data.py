@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from h5py import File as Hdf5File
+from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_int_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_int_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from numpy import float32
     from numpy.typing import NDArray
 
 
@@ -88,12 +88,9 @@ class SpiralArmErrorData:
 
         """
         names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "arm_names")
-        cluster_errors: NDArray[float32]
-        cluster_errors = read_dataset_from_hdf5(in_file, "arm_cluster_errors")
-        fit_errors: NDArray[float32]
-        fit_errors = read_dataset_from_hdf5(in_file, "arm_fit_errors")
-        original_fit_errors: NDArray[float32]
-        original_fit_errors = read_dataset_from_hdf5(in_file, "arm_original_fit_errors")
+        cluster_errors = read_dataset_from_hdf5_with_dtype(in_file, "arm_cluster_errors", dtype=float32)
+        fit_errors = read_dataset_from_hdf5_with_dtype(in_file, "arm_fit_errors", dtype=float32)
+        original_fit_errors = read_dataset_from_hdf5_with_dtype(in_file, "arm_original_fit_errors", dtype=float32)
         num_fit_points: int = get_int_attr_from_hdf5(in_file, "num_fit_points")
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
         return cls(

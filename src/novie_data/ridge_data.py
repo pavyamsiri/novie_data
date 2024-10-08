@@ -12,7 +12,7 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 from .snapshot_data import SnapshotData
 
@@ -90,10 +90,8 @@ class RidgeData:
             max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
 
             # Arrays
-            mass_density: NDArray[float32]
-            mass_density = read_dataset_from_hdf5(file, "mass_density")
-            number_density: NDArray[float32]
-            number_density = read_dataset_from_hdf5(file, "number_density")
+            mass_density = read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=float32)
+            number_density = read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=float32)
 
             snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())

@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self, cast
 
 import numpy as np
+from numpy import float32
 
-from .serde.accessors import get_and_read_dataset_from_hdf5, get_string_sequence_from_hdf5
+from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from h5py import File as Hdf5File
-    from numpy import float32
     from numpy.typing import NDArray
 
 
@@ -88,7 +88,7 @@ class SnapshotData:
 
         """
         snapshot_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "snapshot_names")
-        times, _ = get_and_read_dataset_from_hdf5(in_file, "times")
+        times = read_dataset_from_hdf5_with_dtype(in_file, "times", dtype=float32)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
         return cls(

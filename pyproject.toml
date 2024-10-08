@@ -52,4 +52,4 @@ dev-dependencies = [
 
 [tool.uv.sources]
 scipy-stubs = { git = "https://github.com/jorenham/scipy-stubs.git" }
-h5py-stubs = { path = "../../src/h5py-stubs" }
+h5py-stubs = { git = "https://github.com/pavyamsiri/h5py-stubs.git" }

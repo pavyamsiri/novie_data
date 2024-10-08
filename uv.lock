@@ -25,16 +25,10 @@ wheels = [
 [[package]]
 name = "h5py-stubs"
 version = "0.1.0"
-source = { directory = "../../src/h5py-stubs" }
+source = { git = "https://github.com/pavyamsiri/h5py-stubs.git#4dc06e95d48ee3e70c91fcb215098f22f43a236a" }
 dependencies = [
     { name = "h5py" },
     { name = "optype" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "h5py", specifier = ">=3.12.1" },
-    { name = "optype", specifier = ">=0.6.1" },
 ]
 
 [[package]]
@@ -62,7 +56,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "h5py-stubs", directory = "../../src/h5py-stubs" },
+    { name = "h5py-stubs", git = "https://github.com/pavyamsiri/h5py-stubs.git" },
     { name = "scipy-stubs", git = "https://github.com/jorenham/scipy-stubs.git" },
 ]
 

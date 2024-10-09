@@ -40,7 +40,7 @@ class SolarCircleData:
             raise ValueError(msg)
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to disk.
 
         Parameters
         ----------
@@ -59,7 +59,7 @@ class SolarCircleData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from disk.
 
         Parameters
         ----------

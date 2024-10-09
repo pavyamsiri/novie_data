@@ -14,7 +14,6 @@ from packaging.version import Version
 
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
@@ -56,7 +55,7 @@ class RadialBinningData:
             raise ValueError(msg)
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to file.
 
         Parameters
         ----------
@@ -76,7 +75,7 @@ class RadialBinningData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from file.
 
         Parameters
         ----------
@@ -130,7 +129,7 @@ class HeightBinningData:
             raise ValueError(msg)
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to file.
 
         Parameters
         ----------
@@ -150,7 +149,7 @@ class HeightBinningData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from file.
 
         Parameters
         ----------
@@ -224,7 +223,7 @@ class WedgeData:
         self.longitude_width_deg: float = self.max_longitude_deg - self.min_longitude_deg
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to file.
 
         Parameters
         ----------
@@ -246,7 +245,7 @@ class WedgeData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from file.
 
         Parameters
         ----------
@@ -281,7 +280,6 @@ class CorrugationData:
     mean_height: NDArray[float32]
     mean_height_error: NDArray[float32]
 
-    snapshot_data: SnapshotData
     radial_bins: RadialBinningData
     height_bins: HeightBinningData
     wedge_data: WedgeData
@@ -296,20 +294,6 @@ class CorrugationData:
         projection_shape = self.projection_rz.shape
         if len(projection_shape) != 4:
             msg = f"Expected the projection to be 4D but it is instead {len(projection_shape)}D."
-            raise ValueError(msg)
-        expected_projection_shape = (
-            self.height_bins.num_bins,
-            self.radial_bins.num_bins,
-            self.snapshot_data.num_frames,
-            self.wedge_data.num_wedges,
-        )
-        expected_projection_shape_delete = (
-            self.height_bins.num_bins,
-            self.radial_bins.num_bins,
-            self.snapshot_data.num_frames,
-        )
-        if projection_shape not in (expected_projection_shape, expected_projection_shape_delete):
-            msg = f"Expected the projection to have the shape {expected_projection_shape} but got {projection_shape}."
             raise ValueError(msg)
 
         if len(self.radii.shape) != 1:
@@ -330,14 +314,9 @@ class CorrugationData:
             msg = f"Expected the mean height and its error array to be 3D but it is instead {len(mean_height_shape)}D."
             raise ValueError(msg)
 
-        expected_mean_height_shape = (self.radial_bins.num_bins, self.snapshot_data.num_frames, self.wedge_data.num_wedges)
-        if mean_height_shape != expected_mean_height_shape:
-            msg = f"Expected the mean height array to have the shape {expected_mean_height_shape} but got {mean_height_shape}."
-            raise ValueError(msg)
-
     @classmethod
     def load(cls, path: Path) -> Self:
-        """Deserialize surface density data from file.
+        """Deserialize data from disk.
 
         Parameters
         ----------
@@ -360,7 +339,6 @@ class CorrugationData:
             radii = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
             mean_height = read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=float32)
             mean_height_error = read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=float32)
-            snapshot_data = SnapshotData.load_from(file)
             radial_bins = RadialBinningData.load_from(file)
             height_bins = HeightBinningData.load_from(file)
             wedge_data = WedgeData.load_from(file)
@@ -368,7 +346,6 @@ class CorrugationData:
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
-            snapshot_data=snapshot_data,
             projection_rz=projection_rz,
             radii=radii,
             mean_height=mean_height,
@@ -380,7 +357,7 @@ class CorrugationData:
         )
 
     def dump(self, path: Path) -> None:
-        """Serialize surface density data to disk.
+        """Serialize data to disk.
 
         Parameters
         ----------
@@ -398,7 +375,6 @@ class CorrugationData:
             file.create_dataset("radii", data=self.radii)
             file.create_dataset("mean_height", data=self.mean_height)
             file.create_dataset("mean_height_error", data=self.mean_height_error)
-            self.snapshot_data.dump_into(file)
             self.radial_bins.dump_into(file)
             self.height_bins.dump_into(file)
             self.wedge_data.dump_into(file)
@@ -411,7 +387,7 @@ class CorrugationData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.projection_rz.shape[2]
 
     def get_radial_limits(self) -> tuple[float, float]:
         """Return the radial limits.

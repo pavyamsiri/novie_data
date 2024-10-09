@@ -13,7 +13,6 @@ from packaging.version import Version
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
@@ -48,8 +47,6 @@ class WrinkleData:
         The solar circle used.
     neighbourhood_data : SphericalNeighbourhoodData
         The neighbourhood configuration.
-    snapshot_data : SnapshotData
-        The number of frames and per snapshot data.
 
     """
 
@@ -61,7 +58,6 @@ class WrinkleData:
     num_bins: int
     solar_circle_data: SolarCircleData
     neighbourhood_data: SphericalNeighbourhoodData
-    snapshot_data: SnapshotData
 
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
     VERSION: ClassVar[Version] = Version("2.0.0")
@@ -83,10 +79,6 @@ class WrinkleData:
         if shape[0] != self.num_bins:
             msg = f"Expected the number of bins to be {self.num_bins} but got {shape[0]}"
             raise ValueError(msg)
-        # Verify that the array has the expected number of frames
-        if shape[1] != self.snapshot_data.num_frames:
-            msg = f"Expected the number of frames to be {self.snapshot_data.num_frames} but got {shape[1]}"
-            raise ValueError(msg)
         # Verify that the array has the expected number of neighbourhoods
         if shape[2] != self.neighbourhood_data.num_spheres:
             msg = f"Expected the number of spheres to be {self.neighbourhood_data.num_spheres} but got {shape[2]}"
@@ -102,11 +94,11 @@ class WrinkleData:
 
         # Useful values
         self.num_spheres: int = self.neighbourhood_data.num_spheres
-        self.num_frames: int = self.snapshot_data.num_frames
+        self.num_frames: int = shape[1]
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        """Deserialize surface density data from file.
+        """Deserialize data from file.
 
         Parameters
         ----------
@@ -134,7 +126,6 @@ class WrinkleData:
 
             solar_circle_data = SolarCircleData.load_from(file)
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
-            snapshot_data = SnapshotData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -146,11 +137,10 @@ class WrinkleData:
             num_bins=num_bins,
             solar_circle_data=solar_circle_data,
             neighbourhood_data=neighbourhood_data,
-            snapshot_data=snapshot_data,
         )
 
     def dump(self, path: Path) -> None:
-        """Serialize surface density data to disk.
+        """Serialize data to disk.
 
         Parameters
         ----------
@@ -172,7 +162,6 @@ class WrinkleData:
             file.create_dataset("mean_radial_velocity_error", data=self.mean_radial_velocity_error)
             self.solar_circle_data.dump_into(file)
             self.neighbourhood_data.dump_into(file)
-            self.snapshot_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     # Convenience functions

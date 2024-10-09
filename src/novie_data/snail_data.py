@@ -17,7 +17,6 @@ from scipy.ndimage import gaussian_filter
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
@@ -114,13 +113,12 @@ class SnailPlotColoring(Enum):
 
 @dataclass
 class SnailData:
-    """The surface densities of a snapshot."""
+    """The snail data of a snapshot."""
 
     # Data products
     surface_density: NDArray[float32]
     azimuthal_velocity: NDArray[float32]
     radial_velocity: NDArray[float32]
-    snapshot_data: SnapshotData
     solar_circle_data: SolarCircleData
     neighbourhood_data: SphericalNeighbourhoodData
 
@@ -142,17 +140,6 @@ class SnailData:
         )
         if not same_shape:
             msg = "The colorings differ in shape!"
-            raise ValueError(msg)
-
-        actual_shape = self.surface_density.shape
-        expected_shape = (
-            self.num_velocity_bins,
-            self.num_height_bins,
-            self.snapshot_data.num_frames,
-            self.neighbourhood_data.num_spheres,
-        )
-        if actual_shape != expected_shape:
-            msg = f"Expected the colorings to have the shape {expected_shape} but got {actual_shape}."
             raise ValueError(msg)
 
         # TODO(pavyamsiri): Expose this parameter
@@ -191,7 +178,6 @@ class SnailData:
             azimuthal_velocity = read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=float32)
             radial_velocity = read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=float32)
 
-            snapshot_data = SnapshotData.load_from(file)
             solar_circle_data = SolarCircleData.load_from(file)
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
@@ -199,7 +185,6 @@ class SnailData:
             surface_density=surface_density,
             azimuthal_velocity=azimuthal_velocity,
             radial_velocity=radial_velocity,
-            snapshot_data=snapshot_data,
             num_height_bins=num_height_bins,
             num_velocity_bins=num_velocity_bins,
             max_height=max_height,
@@ -230,7 +215,6 @@ class SnailData:
             file.create_dataset("surface_density", data=self.surface_density)
             file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)
             file.create_dataset("radial_velocity", data=self.radial_velocity)
-            self.snapshot_data.dump_into(file)
             self.solar_circle_data.dump_into(file)
             self.neighbourhood_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
@@ -240,7 +224,7 @@ class SnailData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.surface_density.shape[2]
 
     def get_height_limits(self) -> tuple[float, float]:
         """Return the height limits.

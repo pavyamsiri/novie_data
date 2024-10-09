@@ -13,7 +13,6 @@ from packaging.version import Version
 
 from .serde.accessors import read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -34,8 +33,6 @@ class CorrugationResidualsData:
         The mean absolute relative error.
     radii : NDArray[float32]
         The central radius value for each radial bin in units of kpc.
-    snapshot_data : SnapshotData
-        The data generic over each snapshot.
 
     """
 
@@ -44,7 +41,6 @@ class CorrugationResidualsData:
     relative_errors: NDArray[float32]
     mean_absolute_relative_error: NDArray[float32]
     radii: NDArray[float32]
-    snapshot_data: SnapshotData
 
     DATA_FILE_TYPE: ClassVar[str] = "CorrugationResiduals"
     VERSION: ClassVar[Version] = Version("0.1.0")
@@ -105,7 +101,6 @@ class CorrugationResidualsData:
             mean_absolute_relative_error = read_dataset_from_hdf5_with_dtype(file, "mean_absolute_relative_error", dtype=float32)
             radii = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
 
-            snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
             residuals=residuals,
@@ -113,7 +108,6 @@ class CorrugationResidualsData:
             relative_errors=relative_errors,
             mean_absolute_relative_error=mean_absolute_relative_error,
             radii=radii,
-            snapshot_data=snapshot_data,
         )
 
     def dump(self, path: Path) -> None:
@@ -135,7 +129,6 @@ class CorrugationResidualsData:
             file.create_dataset("relative_errors", data=self.relative_errors)
             file.create_dataset("mean_absolute_relative_error", data=self.mean_absolute_relative_error)
             file.create_dataset("radii", data=self.radii)
-            self.snapshot_data.dump_into(file)
         log.info(
             "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", CorrugationResidualsData.__name__, path.absolute()
         )
@@ -144,7 +137,7 @@ class CorrugationResidualsData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.residuals.shape[1]
 
     @property
     def num_filters(self) -> int:

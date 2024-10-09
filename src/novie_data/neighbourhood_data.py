@@ -37,7 +37,7 @@ class SphericalNeighbourhoodData:
             msg = f"Expected the radius to be positive but got {self.radius} kpc."
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to disk.
 
         Parameters
         ----------
@@ -56,7 +56,7 @@ class SphericalNeighbourhoodData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from disk.
 
         Parameters
         ----------

@@ -13,7 +13,6 @@ from packaging.version import Version
 
 from .serde.accessors import get_int_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -79,7 +78,7 @@ class SpiralArmErrorData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from file.
 
         Parameters
         ----------
@@ -104,7 +103,7 @@ class SpiralArmErrorData:
         )
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to file.
 
         Parameters
         ----------
@@ -133,13 +132,10 @@ class SpiralClusterResidualsData:
     ----------
     arm_error_data : SpiralArmErrorData
         The error between observed arms and found clusters.
-    snapshot_data : SnapshotData
-        The data describing each snapshot.
 
     """
 
     arm_error_data: SpiralArmErrorData
-    snapshot_data: SnapshotData
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusterResiduals"
     VERSION: ClassVar[Version] = Version("1.0.0")
@@ -163,7 +159,6 @@ class SpiralClusterResidualsData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
-            snapshot_data = SnapshotData.load_from(file)
             arm_error_data = SpiralArmErrorData.load_from(file)
         log.info(
             "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
@@ -172,7 +167,6 @@ class SpiralClusterResidualsData:
         )
         return cls(
             arm_error_data=arm_error_data,
-            snapshot_data=snapshot_data,
         )
 
     def dump(self, path: Path) -> None:
@@ -190,7 +184,6 @@ class SpiralClusterResidualsData:
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
 
-            self.snapshot_data.dump_into(file)
             self.arm_error_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 

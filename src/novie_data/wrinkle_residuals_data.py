@@ -13,7 +13,6 @@ from packaging.version import Version
 
 from .serde.accessors import read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -34,8 +33,6 @@ class WrinkleResidualsData:
         The mean absolute relative error.
     angular_momentum : NDArray[float32]
         The central angular momentum value for each bin in units of kpc km/s.
-    snapshot_data : SnapshotData
-        The data generic over each snapshot.
 
     """
 
@@ -44,7 +41,6 @@ class WrinkleResidualsData:
     relative_errors: NDArray[float32]
     mean_absolute_relative_error: NDArray[float32]
     angular_momentum: NDArray[float32]
-    snapshot_data: SnapshotData
 
     DATA_FILE_TYPE: ClassVar[str] = "WrinkleResidualsData"
     VERSION: ClassVar[Version] = Version("1.0.0")
@@ -110,7 +106,6 @@ class WrinkleResidualsData:
             angular_momentum: NDArray[float32]
             angular_momentum = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
 
-            snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
             residuals=residuals,
@@ -118,7 +113,6 @@ class WrinkleResidualsData:
             relative_errors=relative_errors,
             mean_absolute_relative_error=mean_absolute_relative_error,
             angular_momentum=angular_momentum,
-            snapshot_data=snapshot_data,
         )
 
     def dump(self, path: Path) -> None:
@@ -141,14 +135,13 @@ class WrinkleResidualsData:
             file.create_dataset("relative_errors", data=self.relative_errors)
             file.create_dataset("mean_absolute_relative_error", data=self.mean_absolute_relative_error)
             file.create_dataset("radii", data=self.angular_momentum)
-            self.snapshot_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     # Convenience functions
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.residuals.shape[1]
 
     @property
     def num_spheres(self) -> int:

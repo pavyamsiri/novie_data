@@ -5,6 +5,9 @@ from pathlib import Path
 
 from h5py import File as Hdf5File
 
+from novie_data.snapshot_data import SnapshotData
+from novie_data.solar_circle_data import SolarCircleData
+
 from .arm_coverage_data import SpiralArmCoverageData
 from .arm_data import SpiralClusterResidualsData
 from .cluster_data import SpiralClusterData
@@ -59,6 +62,8 @@ class NovieFileType(IntEnum):
     WRINKLE_RESIDUALS = auto()
     PERTURBER = auto()
     RIDGE = auto()
+    SNAPSHOT = auto()
+    SOLAR_CIRCLE = auto()
 
 
 def get_novie_file_type(input_path: Path) -> NovieFileType:
@@ -89,6 +94,8 @@ def get_novie_file_type(input_path: Path) -> NovieFileType:
         WrinkleResidualsData.DATA_FILE_TYPE: NovieFileType.WRINKLE_RESIDUALS,
         PerturberData.DATA_FILE_TYPE: NovieFileType.PERTURBER,
         RidgeData.DATA_FILE_TYPE: NovieFileType.RIDGE,
+        SnapshotData.DATA_FILE_TYPE: NovieFileType.SNAPSHOT,
+        SolarCircleData.DATA_FILE_TYPE: NovieFileType.SOLAR_CIRCLE,
     }
 
     with Hdf5File(input_path, "r") as file:

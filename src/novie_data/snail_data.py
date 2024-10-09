@@ -17,7 +17,6 @@ from scipy.ndimage import gaussian_filter
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -119,7 +118,6 @@ class SnailData:
     surface_density: NDArray[float32]
     azimuthal_velocity: NDArray[float32]
     radial_velocity: NDArray[float32]
-    solar_circle_data: SolarCircleData
     neighbourhood_data: SphericalNeighbourhoodData
 
     # Metadata
@@ -129,7 +127,7 @@ class SnailData:
     max_velocity: float
 
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
-    VERSION: ClassVar[Version] = Version("3.0.0")
+    VERSION: ClassVar[Version] = Version("4.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -178,7 +176,6 @@ class SnailData:
             azimuthal_velocity = read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=float32)
             radial_velocity = read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=float32)
 
-            solar_circle_data = SolarCircleData.load_from(file)
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -189,7 +186,6 @@ class SnailData:
             num_velocity_bins=num_velocity_bins,
             max_height=max_height,
             max_velocity=max_velocity,
-            solar_circle_data=solar_circle_data,
             neighbourhood_data=neighbourhood_data,
         )
 
@@ -215,7 +211,6 @@ class SnailData:
             file.create_dataset("surface_density", data=self.surface_density)
             file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)
             file.create_dataset("radial_velocity", data=self.radial_velocity)
-            self.solar_circle_data.dump_into(file)
             self.neighbourhood_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 

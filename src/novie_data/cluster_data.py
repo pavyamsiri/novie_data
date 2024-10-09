@@ -257,7 +257,7 @@ class SpiralClusterData:
     cluster_data: ClusterData
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusters"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
     MAX_CLUSTERS: int = 256
 
     @classmethod

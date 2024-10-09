@@ -41,7 +41,7 @@ class RidgeData:
     max_velocity: float
 
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""

@@ -116,7 +116,7 @@ class SurfaceDensityData:
     disc_profile: ExponentialDiscProfileData
 
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""

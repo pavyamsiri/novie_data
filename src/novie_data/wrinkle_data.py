@@ -13,7 +13,6 @@ from packaging.version import Version
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,8 +42,6 @@ class WrinkleData:
         The maximum angular momentum in kpc km/s.
     num_bins : int
         The number of bins in angular momentum Lz.
-    solar_circle_data : SolarCircleData
-        The solar circle used.
     neighbourhood_data : SphericalNeighbourhoodData
         The neighbourhood configuration.
 
@@ -56,11 +53,10 @@ class WrinkleData:
     min_lz: float
     max_lz: float
     num_bins: int
-    solar_circle_data: SolarCircleData
     neighbourhood_data: SphericalNeighbourhoodData
 
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -124,7 +120,6 @@ class WrinkleData:
             mean_radial_velocity = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=float32)
             mean_radial_velocity_error = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=float32)
 
-            solar_circle_data = SolarCircleData.load_from(file)
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
@@ -135,7 +130,6 @@ class WrinkleData:
             min_lz=min_lz,
             max_lz=max_lz,
             num_bins=num_bins,
-            solar_circle_data=solar_circle_data,
             neighbourhood_data=neighbourhood_data,
         )
 
@@ -160,7 +154,6 @@ class WrinkleData:
             file.create_dataset("angular_momentum", data=self.angular_momentum)
             file.create_dataset("mean_radial_velocity", data=self.mean_radial_velocity)
             file.create_dataset("mean_radial_velocity_error", data=self.mean_radial_velocity_error)
-            self.solar_circle_data.dump_into(file)
             self.neighbourhood_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 

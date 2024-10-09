@@ -14,7 +14,6 @@ from packaging.version import Version
 
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -283,10 +282,9 @@ class CorrugationData:
     radial_bins: RadialBinningData
     height_bins: HeightBinningData
     wedge_data: WedgeData
-    solar_circle_data: SolarCircleData
 
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -342,7 +340,6 @@ class CorrugationData:
             radial_bins = RadialBinningData.load_from(file)
             height_bins = HeightBinningData.load_from(file)
             wedge_data = WedgeData.load_from(file)
-            solar_circle_data = SolarCircleData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -353,7 +350,6 @@ class CorrugationData:
             radial_bins=radial_bins,
             height_bins=height_bins,
             wedge_data=wedge_data,
-            solar_circle_data=solar_circle_data,
         )
 
     def dump(self, path: Path) -> None:
@@ -378,7 +374,6 @@ class CorrugationData:
             self.radial_bins.dump_into(file)
             self.height_bins.dump_into(file)
             self.wedge_data.dump_into(file)
-            self.solar_circle_data.dump_into(file)
 
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 

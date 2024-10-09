@@ -43,7 +43,7 @@ class WrinkleResidualsData:
     angular_momentum: NDArray[float32]
 
     DATA_FILE_TYPE: ClassVar[str] = "WrinkleResidualsData"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def get_argmin_over_absolute(self) -> tuple[int, int]:
         """Get the frame and filter indices that minimises the sum of square residuals.

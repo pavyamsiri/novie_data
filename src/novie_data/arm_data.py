@@ -138,7 +138,7 @@ class SpiralClusterResidualsData:
     arm_error_data: SpiralArmErrorData
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusterResiduals"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     @classmethod
     def load(cls, path: Path) -> Self:

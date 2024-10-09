@@ -13,6 +13,7 @@ from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     from numpy.typing import NDArray
@@ -66,6 +67,18 @@ class SnapshotData:
         self.codes: NDArray[uint32] = codes
         self.times: NDArray[float32] = times
         self.num_frames: int = num_times
+
+    def snapshot_names(self) -> Iterator[str]:
+        """Yield the snapshot names.
+
+        Yields
+        ------
+        str
+            The name of each snapshot.
+
+        """
+        for code in self.codes:
+            yield f"{self.name}: {code}"
 
     def dump(self, path: Path) -> None:
         """Serialize data to disk.

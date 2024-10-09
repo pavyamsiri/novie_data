@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
@@ -16,8 +17,6 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from numpy.typing import NDArray
 
 

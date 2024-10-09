@@ -44,6 +44,8 @@ class WrinkleData:
         The number of bins in angular momentum Lz.
     neighbourhood_data : SphericalNeighbourhoodData
         The neighbourhood configuration.
+    distance_error : float
+        The error on the LOS distance (1 sigma) as a percentage of the distance.
 
     """
 
@@ -54,6 +56,9 @@ class WrinkleData:
     max_lz: float
     num_bins: int
     neighbourhood_data: SphericalNeighbourhoodData
+
+    # Distance error (1 std) as a percentage
+    distance_error: float
 
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
     VERSION: ClassVar[Version] = Version("3.0.0")
@@ -114,6 +119,7 @@ class WrinkleData:
             num_bins: int = get_int_attr_from_hdf5(file, "num_bins")
             min_lz: float = get_float_attr_from_hdf5(file, "min_lz")
             max_lz: float = get_float_attr_from_hdf5(file, "max_lz")
+            distance_error: float = get_float_attr_from_hdf5(file, "distance_error")
 
             # Projections
             angular_momentum = read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=float32)
@@ -131,6 +137,7 @@ class WrinkleData:
             max_lz=max_lz,
             num_bins=num_bins,
             neighbourhood_data=neighbourhood_data,
+            distance_error=distance_error,
         )
 
     def dump(self, path: Path) -> None:
@@ -150,6 +157,7 @@ class WrinkleData:
             file.attrs["num_bins"] = self.num_bins
             file.attrs["min_lz"] = self.min_lz
             file.attrs["max_lz"] = self.max_lz
+            file.attrs["distance_error"] = self.distance_error
 
             file.create_dataset("angular_momentum", data=self.angular_momentum)
             file.create_dataset("mean_radial_velocity", data=self.mean_radial_velocity)

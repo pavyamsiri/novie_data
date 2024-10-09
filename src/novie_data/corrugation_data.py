@@ -283,6 +283,9 @@ class CorrugationData:
     height_bins: HeightBinningData
     wedge_data: WedgeData
 
+    # Standard deviation of distances as a percentage
+    distance_error: float
+
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
     VERSION: ClassVar[Version] = Version("3.0.0")
 
@@ -331,6 +334,8 @@ class CorrugationData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            distance_error: float = get_float_attr_from_hdf5(file, "distance_error")
+
             # Projections
             projection_rz = read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=float32)
             # Mean height
@@ -350,6 +355,7 @@ class CorrugationData:
             radial_bins=radial_bins,
             height_bins=height_bins,
             wedge_data=wedge_data,
+            distance_error=distance_error,
         )
 
     def dump(self, path: Path) -> None:
@@ -366,6 +372,7 @@ class CorrugationData:
             # General
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
+            file.attrs["distance_error"] = self.distance_error
 
             file.create_dataset("projection_rz", data=self.projection_rz)
             file.create_dataset("radii", data=self.radii)

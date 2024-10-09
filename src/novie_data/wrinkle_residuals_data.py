@@ -95,15 +95,10 @@ class WrinkleResidualsData:
             verify_file_version_from_hdf5(file, cls.VERSION)
 
             # Arrays
-            residuals: NDArray[float32]
             residuals = read_dataset_from_hdf5_with_dtype(file, "residuals", dtype=float32)
-            sum_of_square_residuals: NDArray[float32]
             sum_of_square_residuals = read_dataset_from_hdf5_with_dtype(file, "sum_of_square_residuals", dtype=float32)
-            relative_errors: NDArray[float32]
             relative_errors = read_dataset_from_hdf5_with_dtype(file, "relative_errors", dtype=float32)
-            mean_absolute_relative_error: NDArray[float32]
             mean_absolute_relative_error = read_dataset_from_hdf5_with_dtype(file, "mean_absolute_relative_error", dtype=float32)
-            angular_momentum: NDArray[float32]
             angular_momentum = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())

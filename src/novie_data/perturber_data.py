@@ -10,7 +10,7 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -34,12 +34,15 @@ class PerturberData:
         The 3D velocity at every frame in km/s.
     mass : NDArray[float]
         The mass at every frame in Msol.
+    name : str
+        The name of the dataset.
 
     """
 
     position: NDArray[float32]
     velocity: NDArray[float32]
     mass: NDArray[float32]
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Perturber"
     VERSION: ClassVar[Version] = Version("2.0.0")
@@ -77,6 +80,8 @@ class PerturberData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Projections
             position = read_dataset_from_hdf5_with_dtype(file, "position", dtype=float32)
             velocity = read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=float32)
@@ -87,6 +92,7 @@ class PerturberData:
             position=position,
             velocity=velocity,
             mass=mass,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -103,6 +109,7 @@ class PerturberData:
             # General
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
 
             file.create_dataset("position", data=self.position)
             file.create_dataset("velocity", data=self.velocity)

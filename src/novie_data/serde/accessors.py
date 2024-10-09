@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, SupportsFloat, SupportsInt, TypeVar, cast
 
 import numpy as np
 from h5py import Dataset as Hdf5Dataset
@@ -151,7 +151,10 @@ def get_int_attr_from_hdf5(file: Hdf5File, name: str) -> int:
 
     """
     value = file.attrs[name]
-    return int(cast(int, value))
+    if isinstance(value, SupportsInt):
+        return int(value)
+    msg = f"The attribute {name} is not an integer!"
+    raise TypeError(msg)
 
 
 def get_float_attr_from_hdf5(file: Hdf5File, name: str) -> float:
@@ -166,12 +169,34 @@ def get_float_attr_from_hdf5(file: Hdf5File, name: str) -> float:
 
     Returns
     -------
-    value : int
+    value : float
         The float attribute queried.
 
     """
     value = file.attrs[name]
-    return float(cast(float, value))
+    if isinstance(value, SupportsFloat):
+        return float(value)
+    msg = f"The attribute {name} is not a float!"
+    raise TypeError(msg)
+
+
+def get_str_attr_from_hdf5(file: Hdf5File, name: str) -> str:
+    """Get a string attribute from a HDF5 file.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The HDF5 file to read from.
+    name : str
+        The name of the attribute.
+
+    Returns
+    -------
+    value : str
+        The string attribute queried.
+
+    """
+    return str(file.attrs[name])
 
 
 def _verify_ndarray(arr: object, msg: str) -> AnyArray:

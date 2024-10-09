@@ -12,7 +12,7 @@ from h5py import File as Hdf5File
 from numpy import float32, int8, int16
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_float_attr_from_hdf5, get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -245,6 +245,8 @@ class SpiralClusterData:
         The data pertaining to each found cluster.
     spiral_arm_error_data : SpiralArmErrorData
         The error between observed arms and found clusters.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -255,6 +257,7 @@ class SpiralClusterData:
     global_spiral_data: GlobalSpiralData
     # Cluster data
     cluster_data: ClusterData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusters"
     VERSION: ClassVar[Version] = Version("3.0.0")
@@ -279,6 +282,8 @@ class SpiralClusterData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Arrays
             cluster_masks = read_dataset_from_hdf5_with_dtype(file, "cluster_masks", dtype=int16)
             pixel_to_distance: float = get_float_attr_from_hdf5(file, "pixel_to_distance")
@@ -295,6 +300,7 @@ class SpiralClusterData:
             pixel_to_distance=pixel_to_distance,
             global_spiral_data=global_spiral_data,
             cluster_data=cluster_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -312,6 +318,7 @@ class SpiralClusterData:
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
             file.attrs["pixel_to_distance"] = float(self.pixel_to_distance)
+            file.attrs["name"] = self.name
 
             file.create_dataset("cluster_masks", data=self.cluster_masks)
             self.global_spiral_data.dump_into(file)
@@ -529,7 +536,7 @@ class ProcessedFrameData:
         )
 
     @staticmethod
-    def combine(frames: Sequence[ProcessedFrameData], *, pixel_to_distance: float) -> SpiralClusterData:
+    def combine(frames: Sequence[ProcessedFrameData], *, pixel_to_distance: float, name: str) -> SpiralClusterData:
         """Combine processed frames.
 
         Parameters
@@ -538,6 +545,8 @@ class ProcessedFrameData:
             The frames to combine.
         pixel_to_distance : float
             The unit conversion factor to go from pixels to physical units.
+        name : str
+            The name of the dataset.
 
         Returns
         -------
@@ -555,4 +564,5 @@ class ProcessedFrameData:
             pixel_to_distance=pixel_to_distance,
             global_spiral_data=global_spiral_data,
             cluster_data=cluster_data,
+            name=name,
         )

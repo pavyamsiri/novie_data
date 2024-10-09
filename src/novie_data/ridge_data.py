@@ -12,7 +12,12 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -39,6 +44,8 @@ class RidgeData:
     max_radius: float
     min_velocity: float
     max_velocity: float
+
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
     VERSION: ClassVar[Version] = Version("2.0.0")
@@ -76,6 +83,7 @@ class RidgeData:
             max_radius: float = get_float_attr_from_hdf5(file, "max_radius")
             min_velocity: float = get_float_attr_from_hdf5(file, "min_velocity")
             max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Arrays
             mass_density = read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=float32)
@@ -91,6 +99,7 @@ class RidgeData:
             max_velocity=max_velocity,
             min_radius=min_radius,
             max_radius=max_radius,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -113,6 +122,7 @@ class RidgeData:
             file.attrs["max_radius"] = self.max_radius
             file.attrs["min_velocity"] = self.min_velocity
             file.attrs["max_velocity"] = self.max_velocity
+            file.attrs["name"] = self.name
 
             file.create_dataset("mass_density", data=self.mass_density)
             file.create_dataset("number_density", data=self.number_density)

@@ -12,7 +12,12 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -100,6 +105,8 @@ class SurfaceDensityData:
         The number of bins of all axes.
     disc_profile : ExponentialDiscProfileData
         The parameters determining exponential profile of the disc.
+    name : str
+        The name of the dataset.
 
     Notes
     -----
@@ -114,6 +121,7 @@ class SurfaceDensityData:
     extent: float
     num_bins: int
     disc_profile: ExponentialDiscProfileData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
     VERSION: ClassVar[Version] = Version("3.0.0")
@@ -170,6 +178,7 @@ class SurfaceDensityData:
 
             extent: float = get_float_attr_from_hdf5(file, "extent")
             num_bins: int = get_int_attr_from_hdf5(file, "num_bins")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
             projection_xy = read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=float32)
@@ -189,6 +198,7 @@ class SurfaceDensityData:
             extent=extent,
             num_bins=num_bins,
             disc_profile=disc_profile,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -207,6 +217,7 @@ class SurfaceDensityData:
             file.attrs["version"] = str(cls.VERSION)
             file.attrs["extent"] = self.extent
             file.attrs["num_bins"] = self.num_bins
+            file.attrs["name"] = self.name
 
             file.create_dataset("projection_xy", data=self.projection_xy)
             file.create_dataset("projection_xz", data=self.projection_xz)

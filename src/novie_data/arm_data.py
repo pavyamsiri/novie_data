@@ -11,7 +11,12 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_int_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -132,10 +137,13 @@ class SpiralClusterResidualsData:
     ----------
     arm_error_data : SpiralArmErrorData
         The error between observed arms and found clusters.
+    name : str
+        The name of the dataset.
 
     """
 
     arm_error_data: SpiralArmErrorData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusterResiduals"
     VERSION: ClassVar[Version] = Version("2.0.0")
@@ -159,6 +167,7 @@ class SpiralClusterResidualsData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
             arm_error_data = SpiralArmErrorData.load_from(file)
         log.info(
             "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
@@ -167,6 +176,7 @@ class SpiralClusterResidualsData:
         )
         return cls(
             arm_error_data=arm_error_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -183,6 +193,7 @@ class SpiralClusterResidualsData:
             # General
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
 
             self.arm_error_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())

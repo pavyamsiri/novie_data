@@ -15,7 +15,12 @@ from packaging.version import Version
 from scipy.ndimage import gaussian_filter
 
 from .neighbourhood_data import SphericalNeighbourhoodData
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -126,6 +131,8 @@ class SnailData:
     max_height: float
     max_velocity: float
 
+    name: str
+
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
     VERSION: ClassVar[Version] = Version("4.0.0")
 
@@ -170,6 +177,7 @@ class SnailData:
             num_velocity_bins: int = get_int_attr_from_hdf5(file, "num_velocity_bins")
             max_height: float = get_float_attr_from_hdf5(file, "max_height")
             max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Arrays
             surface_density = read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=float32)
@@ -187,6 +195,7 @@ class SnailData:
             max_height=max_height,
             max_velocity=max_velocity,
             neighbourhood_data=neighbourhood_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -207,6 +216,7 @@ class SnailData:
             file.attrs["num_velocity_bins"] = self.num_velocity_bins
             file.attrs["max_height"] = self.max_height
             file.attrs["max_velocity"] = self.max_velocity
+            file.attrs["name"] = self.name
 
             file.create_dataset("surface_density", data=self.surface_density)
             file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)

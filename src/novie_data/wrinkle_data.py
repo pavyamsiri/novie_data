@@ -11,7 +11,12 @@ from numpy import float32
 from packaging.version import Version
 
 from .neighbourhood_data import SphericalNeighbourhoodData
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -46,6 +51,8 @@ class WrinkleData:
         The neighbourhood configuration.
     distance_error : float
         The error on the LOS distance (1 sigma) as a percentage of the distance.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -59,6 +66,7 @@ class WrinkleData:
 
     # Distance error (1 std) as a percentage
     distance_error: float
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
     VERSION: ClassVar[Version] = Version("3.0.0")
@@ -120,6 +128,7 @@ class WrinkleData:
             min_lz: float = get_float_attr_from_hdf5(file, "min_lz")
             max_lz: float = get_float_attr_from_hdf5(file, "max_lz")
             distance_error: float = get_float_attr_from_hdf5(file, "distance_error")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
             angular_momentum = read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=float32)
@@ -138,6 +147,7 @@ class WrinkleData:
             num_bins=num_bins,
             neighbourhood_data=neighbourhood_data,
             distance_error=distance_error,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -158,6 +168,7 @@ class WrinkleData:
             file.attrs["min_lz"] = self.min_lz
             file.attrs["max_lz"] = self.max_lz
             file.attrs["distance_error"] = self.distance_error
+            file.attrs["name"] = self.name
 
             file.create_dataset("angular_momentum", data=self.angular_momentum)
             file.create_dataset("mean_radial_velocity", data=self.mean_radial_velocity)

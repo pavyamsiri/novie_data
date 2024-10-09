@@ -11,7 +11,7 @@ from h5py import File as Hdf5File
 from numpy import float32, uint32
 from packaging.version import Version
 
-from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -34,6 +34,8 @@ class SpiralArmCoverageData:
         The number of covered arm pixels.
     num_total_arm_pixels : NDArray[uint32]
         The total number of arm pixels.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -41,6 +43,7 @@ class SpiralArmCoverageData:
     num_total_arm_pixels: NDArray[uint32]
     covered_arm_normalised_densities: NDArray[float32]
     arm_names: Sequence[str]
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralArmCoverage"
     VERSION: ClassVar[Version] = Version("2.0.0")
@@ -99,6 +102,7 @@ class SpiralArmCoverageData:
             verify_file_type_from_hdf5(in_file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(in_file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(in_file, "name")
             num_covered_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_covered_arm_pixels", dtype=uint32)
             num_total_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_total_arm_pixels", dtype=uint32)
             covered_arm_normalised_densities = read_dataset_from_hdf5_with_dtype(
@@ -115,6 +119,7 @@ class SpiralArmCoverageData:
             num_total_arm_pixels=num_total_arm_pixels,
             covered_arm_normalised_densities=covered_arm_normalised_densities,
             arm_names=arm_names,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -131,6 +136,7 @@ class SpiralArmCoverageData:
             # General
             out_file.attrs["type"] = cls.DATA_FILE_TYPE
             out_file.attrs["version"] = str(cls.VERSION)
+            out_file.attrs["name"] = self.name
 
             out_file.create_dataset("num_covered_arm_pixels", data=self.num_covered_arm_pixels)
             out_file.create_dataset("num_total_arm_pixels", data=self.num_total_arm_pixels)

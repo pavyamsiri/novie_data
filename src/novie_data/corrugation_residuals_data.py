@@ -11,7 +11,7 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -33,6 +33,8 @@ class CorrugationResidualsData:
         The mean absolute relative error.
     radii : NDArray[float32]
         The central radius value for each radial bin in units of kpc.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -41,6 +43,7 @@ class CorrugationResidualsData:
     relative_errors: NDArray[float32]
     mean_absolute_relative_error: NDArray[float32]
     radii: NDArray[float32]
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "CorrugationResiduals"
     VERSION: ClassVar[Version] = Version("1.0.0")
@@ -94,6 +97,8 @@ class CorrugationResidualsData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Arrays
             residuals = read_dataset_from_hdf5_with_dtype(file, "residuals", dtype=float32)
             sum_of_square_residuals = read_dataset_from_hdf5_with_dtype(file, "sum_of_square_residuals", dtype=float32)
@@ -108,6 +113,7 @@ class CorrugationResidualsData:
             relative_errors=relative_errors,
             mean_absolute_relative_error=mean_absolute_relative_error,
             radii=radii,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -123,6 +129,7 @@ class CorrugationResidualsData:
             # General
             file.attrs["type"] = CorrugationResidualsData.DATA_FILE_TYPE
             file.attrs["version"] = str(CorrugationResidualsData.VERSION)
+            file.attrs["name"] = self.name
 
             file.create_dataset("residuals", data=self.residuals)
             file.create_dataset("sum_of_square_residuals", data=self.sum_of_square_residuals)

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Self
 from h5py import File as Hdf5File
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5
+from .serde.accessors import get_float_attr_from_hdf5, get_str_attr_from_hdf5
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
@@ -28,11 +28,14 @@ class SolarCircleData:
         The radius of the solar circle in kpc.
     omega : float
         The circular orbital frequency along the circle in radians/Myr.
+    name : str
+        The name of the dataset.
 
     """
 
     solar_radius: float
     omega: float
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
     VERSION: ClassVar[Version] = Version("0.1.0")
@@ -59,6 +62,7 @@ class SolarCircleData:
             file.attrs["version"] = str(cls.VERSION)
             file.attrs["solar_radius"] = self.solar_radius
             file.attrs["omega"] = self.omega
+            file.attrs["name"] = self.name
 
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
@@ -75,6 +79,7 @@ class SolarCircleData:
         with Hdf5File(path, "r") as file:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
+            name: str = get_str_attr_from_hdf5(file, "name")
             solar_radius: float = get_float_attr_from_hdf5(file, "solar_radius")
             omega: float = get_float_attr_from_hdf5(file, "omega")
 
@@ -82,4 +87,5 @@ class SolarCircleData:
         return cls(
             solar_radius=solar_radius,
             omega=omega,
+            name=name,
         )

@@ -54,7 +54,11 @@ class ExponentialDiscProfileData:
         # General
         out_file.attrs["disc_scale_mass"] = self.scale_mass
         out_file.attrs["disc_scale_length"] = self.scale_length
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -69,7 +73,9 @@ class ExponentialDiscProfileData:
         scale_mass: float = get_float_attr_from_hdf5(in_file, "disc_scale_mass")
         scale_length: float = get_float_attr_from_hdf5(in_file, "disc_scale_length")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             scale_mass=scale_mass,
             scale_length=scale_length,

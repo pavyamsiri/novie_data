@@ -92,7 +92,9 @@ class SpiralArmErrorData:
         fit_errors = read_dataset_from_hdf5_with_dtype(in_file, "arm_fit_errors", dtype=float32)
         original_fit_errors = read_dataset_from_hdf5_with_dtype(in_file, "arm_original_fit_errors", dtype=float32)
         num_fit_points: int = get_int_attr_from_hdf5(in_file, "num_fit_points")
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             names=names,
             cluster_errors=cluster_errors,
@@ -116,7 +118,11 @@ class SpiralArmErrorData:
         out_file.create_dataset("arm_cluster_errors", data=self.cluster_errors)
         out_file.create_dataset("arm_fit_errors", data=self.fit_errors)
         out_file.create_dataset("arm_original_fit_errors", data=self.original_fit_errors)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
 
 @dataclass

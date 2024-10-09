@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 from .serde.accessors import get_float_attr_from_hdf5
@@ -50,7 +51,11 @@ class SolarCircleData:
         # General
         out_file.attrs["solar_radius"] = self.solar_radius
         out_file.attrs["omega"] = self.omega
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -65,7 +70,9 @@ class SolarCircleData:
         solar_radius: float = get_float_attr_from_hdf5(in_file, "solar_radius")
         omega: float = get_float_attr_from_hdf5(in_file, "omega")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             solar_radius=solar_radius,
             omega=omega,

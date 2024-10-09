@@ -90,7 +90,9 @@ class SnapshotData:
         snapshot_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "snapshot_names")
         times = read_dataset_from_hdf5_with_dtype(in_file, "times", dtype=float32)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             names=snapshot_names,
             times=times,

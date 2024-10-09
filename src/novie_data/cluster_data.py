@@ -74,7 +74,9 @@ class GlobalSpiralData:
         overall_pitch_angles = read_dataset_from_hdf5_with_dtype(in_file, "overall_pitch_angles", dtype=float32)
         winding_directions = read_dataset_from_hdf5_with_dtype(in_file, "winding_directions", dtype=int8)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(overall_pitch_angles=overall_pitch_angles, winding_directions=winding_directions)
 
     def dump_into(self, out_file: Hdf5File) -> None:
@@ -89,7 +91,11 @@ class GlobalSpiralData:
         # General
         out_file.create_dataset("overall_pitch_angles", data=self.overall_pitch_angles)
         out_file.create_dataset("winding_directions", data=self.winding_directions)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
 
 @dataclass
@@ -186,7 +192,9 @@ class ClusterData:
         is_two_revolution = read_dataset_from_hdf5_with_dtype(in_file, "is_two_revolution", dtype=np.bool_)
         num_clusters = read_dataset_from_hdf5_with_dtype(in_file, "num_clusters", dtype=int16)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             arc_bounds=arc_bounds,
             offset=offset,
@@ -214,7 +222,11 @@ class ClusterData:
         out_file.create_dataset("cluster_fit_errors", data=self.errors)
         out_file.create_dataset("is_two_revolution", data=self.is_two_revolution)
         out_file.create_dataset("num_clusters", data=self.num_clusters)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
 
 @dataclass

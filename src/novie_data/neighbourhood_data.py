@@ -47,7 +47,11 @@ class SphericalNeighbourhoodData:
         # General
         out_file.attrs["num_spheres"] = self.num_spheres
         out_file.attrs["sphere_radius"] = self.radius
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -65,7 +69,7 @@ class SphericalNeighbourhoodData:
         log.info(
             "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
             cls.__name__,
-            in_file.filename,
+            Path(in_file.filename).absolute(),
         )
         return cls(
             num_spheres=num_spheres,

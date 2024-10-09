@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
@@ -17,8 +18,6 @@ from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from numpy.typing import NDArray
 
 
@@ -69,7 +68,11 @@ class RadialBinningData:
         out_file.attrs["num_radial_bins"] = self.num_bins
         out_file.attrs["min_radius"] = self.min_radius
         out_file.attrs["max_radius"] = self.max_radius
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -85,7 +88,9 @@ class RadialBinningData:
         min_radius: float = get_float_attr_from_hdf5(in_file, "min_radius")
         max_radius: float = get_float_attr_from_hdf5(in_file, "max_radius")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             num_bins=num_bins,
             min_radius=min_radius,
@@ -137,7 +142,11 @@ class HeightBinningData:
         out_file.attrs["num_height_bins"] = self.num_bins
         out_file.attrs["max_height"] = self.max_height
         out_file.attrs["cutoff_frequency"] = self.cutoff_frequency
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -153,7 +162,9 @@ class HeightBinningData:
         max_height: float = get_float_attr_from_hdf5(in_file, "max_height")
         cutoff_frequency: float = get_float_attr_from_hdf5(in_file, "cutoff_frequency")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             num_bins=num_bins,
             max_height=max_height,
@@ -227,7 +238,11 @@ class WedgeData:
         out_file.attrs["outer_radius"] = self.outer_radius
         out_file.attrs["min_longitude_deg"] = self.min_longitude_deg
         out_file.attrs["max_longitude_deg"] = self.max_longitude_deg
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -245,7 +260,9 @@ class WedgeData:
         min_longitude_deg: float = get_float_attr_from_hdf5(in_file, "min_longitude_deg")
         max_longitude_deg: float = get_float_attr_from_hdf5(in_file, "max_longitude_deg")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             num_wedges=num_wedges,
             inner_radius=inner_radius,

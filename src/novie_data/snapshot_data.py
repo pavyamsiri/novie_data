@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, ClassVar, Self
 
-import numpy as np
-from numpy import float32
+from h5py import File as Hdf5File
+from numpy import float32, uint32
+from packaging.version import Version
 
-from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from pathlib import Path
 
-    from h5py import File as Hdf5File
     from numpy.typing import NDArray
 
 
@@ -26,99 +26,87 @@ class SnapshotData:
 
     Attributes
     ----------
-    names : Sequence[str]
-        The names of each snapshot.
+    name : str
+        The name of the dataset.
+    codes : NDArray[uint32]
+        The snapshot codes.
     times : NDArray[float32]
         The time associated with each snapshot in Myr.
 
     """
 
-    def __init__(self, names: Sequence[str], times: NDArray[float32]) -> None:
+    DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
+    VERSION: ClassVar[Version] = Version("0.1.0")
+
+    def __init__(self, name: str, codes: NDArray[uint32], times: NDArray[float32]) -> None:
         """Initialize the snapshot data.
 
         Parameters
         ----------
-        names : Sequence[str]
-            The names of each snapshot.
+        name : str
+            The name of the dataset.
+        codes : NDArray[uint32]
+            The snapshot codes.
         times : NDArray[float32]
             The time associated with each snapshot in Myr.
 
         """
-        times_dimension = len(cast(tuple[int], times.shape))
+        times_dimension = len(times.shape)
         if times_dimension != 1:
             msg = f"Expected `times` to be a 1D array but it is {times_dimension}D instead!"
             raise ValueError(msg)
         num_times: int = len(self.times)
-        num_names: int = len(self.names)
+        num_codes: int = len(self.codes)
 
-        if num_times != num_names:
-            msg = f"The number of times {num_times} is not equal to the number of snapshot names {num_names}!"
+        if num_times != num_codes:
+            msg = f"The number of times {num_times} is not equal to the number of snapshot names {num_codes}!"
             raise ValueError(msg)
 
-        self.names: Sequence[str] = names
+        self.name: str = name
+        self.codes: NDArray[uint32] = codes
         self.times: NDArray[float32] = times
         self.num_frames: int = num_times
 
-    def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+    def dump(self, path: Path) -> None:
+        """Serialize data to disk.
 
         Parameters
         ----------
-        out_file : Hdf5File
-            The HDF5 file to write to.
+        path : Path
+            The path to the data.
 
         """
-        # General
-        _ = out_file.create_dataset("snapshot_names", data=self.names)
-        _ = out_file.create_dataset("times", data=self.times)
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            type(self).__name__,
-            Path(out_file.filename).absolute(),
-        )
+        cls = type(self)
+        with Hdf5File(path, "w") as file:
+            # General
+            file.attrs["type"] = cls.DATA_FILE_TYPE
+            file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
+
+            file.create_dataset("codes", data=self.codes)
+            file.create_dataset("times", data=self.times)
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
-    def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+    def load(cls, path: Path) -> Self:
+        """Deerialize data from disk.
 
         Parameters
         ----------
-        in_file : Hdf5File
-            The HDF5 file to read from.
+        path : Path
+            The path to the data.
 
         """
-        snapshot_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "snapshot_names")
-        times = read_dataset_from_hdf5_with_dtype(in_file, "times", dtype=float32)
+        with Hdf5File(path, "r") as file:
+            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
+            verify_file_version_from_hdf5(file, cls.VERSION)
+            name: str = get_str_attr_from_hdf5(file, "name")
+            codes = read_dataset_from_hdf5_with_dtype(file, "codes", dtype=uint32)
+            times = read_dataset_from_hdf5_with_dtype(file, "times", dtype=float32)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
-            names=snapshot_names,
+            name=name,
+            codes=codes,
             times=times,
         )
-
-    @staticmethod
-    def all_same(data_list: Sequence[SnapshotData]) -> bool:
-        """Return whether the list of snapshot data are all the same.
-
-        Parameters
-        ----------
-        data_list : Sequence[SnapshotData]
-            The list of snapshot data.
-
-        Returns
-        -------
-        all_same : bool
-            This is `True` if all snapshot data are equal otherwise `False`.
-
-        """
-        if len(data_list) == 0:
-            return True
-        reference_data = data_list[0]
-        for current_data in data_list[1:]:
-            if current_data.num_frames != reference_data.num_frames:
-                return False
-            if not np.allclose(current_data.times, reference_data.times):
-                return False
-            if current_data.names != reference_data.names:
-                return False
-        return True

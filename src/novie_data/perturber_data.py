@@ -10,9 +10,8 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,22 +34,24 @@ class PerturberData:
         The 3D velocity at every frame in km/s.
     mass : NDArray[float]
         The mass at every frame in Msol.
+    name : str
+        The name of the dataset.
 
     """
 
     position: NDArray[float32]
     velocity: NDArray[float32]
     mass: NDArray[float32]
-    snapshot_data: SnapshotData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Perturber"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
         # Validate projection
-        num_frames: int = self.snapshot_data.num_frames
-        if self.position.shape[0] != 3 or self.position.shape[1] != num_frames:
+        num_frames: int = self.position.shape[1]
+        if self.position.shape[0] != 3:
             msg = f"Expected the position vector to have the shape (3, {num_frames}) but got {self.position.shape}."
             raise ValueError(msg)
         if self.velocity.shape[0] != 3 or self.velocity.shape[1] != num_frames:
@@ -62,7 +63,7 @@ class PerturberData:
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        """Deserialize surface density data from file.
+        """Deserialize data from disk.
 
         Parameters
         ----------
@@ -79,22 +80,23 @@ class PerturberData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Projections
             position = read_dataset_from_hdf5_with_dtype(file, "position", dtype=float32)
             velocity = read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=float32)
             mass = read_dataset_from_hdf5_with_dtype(file, "mass", dtype=float32)
-            snapshot_data = SnapshotData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
             position=position,
             velocity=velocity,
             mass=mass,
-            snapshot_data=snapshot_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
-        """Serialize surface density data to disk.
+        """Serialize data to disk.
 
         Parameters
         ----------
@@ -107,11 +109,11 @@ class PerturberData:
             # General
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
 
             file.create_dataset("position", data=self.position)
             file.create_dataset("velocity", data=self.velocity)
             file.create_dataset("mass", data=self.mass)
-            self.snapshot_data.dump_into(file)
 
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
@@ -120,4 +122,4 @@ class PerturberData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.position.shape[1]

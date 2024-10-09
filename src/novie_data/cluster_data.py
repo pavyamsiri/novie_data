@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
 import numpy as np
@@ -11,13 +12,11 @@ from h5py import File as Hdf5File
 from numpy import float32, int8, int16
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_float_attr_from_hdf5, get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from numpy.typing import NDArray
 
@@ -63,7 +62,7 @@ class GlobalSpiralData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from disk.
 
         Parameters
         ----------
@@ -74,11 +73,13 @@ class GlobalSpiralData:
         overall_pitch_angles = read_dataset_from_hdf5_with_dtype(in_file, "overall_pitch_angles", dtype=float32)
         winding_directions = read_dataset_from_hdf5_with_dtype(in_file, "winding_directions", dtype=int8)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(overall_pitch_angles=overall_pitch_angles, winding_directions=winding_directions)
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to disk.
 
         Parameters
         ----------
@@ -89,7 +90,11 @@ class GlobalSpiralData:
         # General
         out_file.create_dataset("overall_pitch_angles", data=self.overall_pitch_angles)
         out_file.create_dataset("winding_directions", data=self.winding_directions)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
 
 @dataclass
@@ -170,7 +175,7 @@ class ClusterData:
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from disk.
 
         Parameters
         ----------
@@ -186,7 +191,9 @@ class ClusterData:
         is_two_revolution = read_dataset_from_hdf5_with_dtype(in_file, "is_two_revolution", dtype=np.bool_)
         num_clusters = read_dataset_from_hdf5_with_dtype(in_file, "num_clusters", dtype=int16)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             arc_bounds=arc_bounds,
             offset=offset,
@@ -198,7 +205,7 @@ class ClusterData:
         )
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to disk.
 
         Parameters
         ----------
@@ -214,7 +221,11 @@ class ClusterData:
         out_file.create_dataset("cluster_fit_errors", data=self.errors)
         out_file.create_dataset("is_two_revolution", data=self.is_two_revolution)
         out_file.create_dataset("num_clusters", data=self.num_clusters)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
 
 @dataclass
@@ -234,8 +245,8 @@ class SpiralClusterData:
         The data pertaining to each found cluster.
     spiral_arm_error_data : SpiralArmErrorData
         The error between observed arms and found clusters.
-    snapshot_data : SnapshotData
-        The data describing each snapshot.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -246,11 +257,10 @@ class SpiralClusterData:
     global_spiral_data: GlobalSpiralData
     # Cluster data
     cluster_data: ClusterData
-    # Arm data
-    snapshot_data: SnapshotData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralClusters"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
     MAX_CLUSTERS: int = 256
 
     @classmethod
@@ -272,11 +282,12 @@ class SpiralClusterData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Arrays
             cluster_masks = read_dataset_from_hdf5_with_dtype(file, "cluster_masks", dtype=int16)
             pixel_to_distance: float = get_float_attr_from_hdf5(file, "pixel_to_distance")
 
-            snapshot_data = SnapshotData.load_from(file)
             global_spiral_data = GlobalSpiralData.load_from(file)
             cluster_data = ClusterData.load_from(file)
         log.info(
@@ -289,7 +300,7 @@ class SpiralClusterData:
             pixel_to_distance=pixel_to_distance,
             global_spiral_data=global_spiral_data,
             cluster_data=cluster_data,
-            snapshot_data=snapshot_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -307,9 +318,9 @@ class SpiralClusterData:
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
             file.attrs["pixel_to_distance"] = float(self.pixel_to_distance)
+            file.attrs["name"] = self.name
 
             file.create_dataset("cluster_masks", data=self.cluster_masks)
-            self.snapshot_data.dump_into(file)
             self.global_spiral_data.dump_into(file)
             self.cluster_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
@@ -319,7 +330,7 @@ class SpiralClusterData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.cluster_masks.shape[-1]
 
 
 @dataclass
@@ -525,19 +536,17 @@ class ProcessedFrameData:
         )
 
     @staticmethod
-    def combine(
-        frames: Sequence[ProcessedFrameData], snapshot_data: SnapshotData, *, pixel_to_distance: float
-    ) -> SpiralClusterData:
+    def combine(frames: Sequence[ProcessedFrameData], *, pixel_to_distance: float, name: str) -> SpiralClusterData:
         """Combine processed frames.
 
         Parameters
         ----------
         frames : Sequence[ProcessedFrameData]
             The frames to combine.
-        snapshot_data : SnapshotData
-            The snapshot frame data.
         pixel_to_distance : float
             The unit conversion factor to go from pixels to physical units.
+        name : str
+            The name of the dataset.
 
         Returns
         -------
@@ -555,5 +564,5 @@ class ProcessedFrameData:
             pixel_to_distance=pixel_to_distance,
             global_spiral_data=global_spiral_data,
             cluster_data=cluster_data,
-            snapshot_data=snapshot_data,
+            name=name,
         )

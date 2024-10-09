@@ -11,9 +11,8 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -34,8 +33,8 @@ class WrinkleResidualsData:
         The mean absolute relative error.
     angular_momentum : NDArray[float32]
         The central angular momentum value for each bin in units of kpc km/s.
-    snapshot_data : SnapshotData
-        The data generic over each snapshot.
+    name : str
+        The name of the dataset.
 
     """
 
@@ -44,10 +43,10 @@ class WrinkleResidualsData:
     relative_errors: NDArray[float32]
     mean_absolute_relative_error: NDArray[float32]
     angular_momentum: NDArray[float32]
-    snapshot_data: SnapshotData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "WrinkleResidualsData"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def get_argmin_over_absolute(self) -> tuple[int, int]:
         """Get the frame and filter indices that minimises the sum of square residuals.
@@ -98,19 +97,15 @@ class WrinkleResidualsData:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(file, "name")
+
             # Arrays
-            residuals: NDArray[float32]
             residuals = read_dataset_from_hdf5_with_dtype(file, "residuals", dtype=float32)
-            sum_of_square_residuals: NDArray[float32]
             sum_of_square_residuals = read_dataset_from_hdf5_with_dtype(file, "sum_of_square_residuals", dtype=float32)
-            relative_errors: NDArray[float32]
             relative_errors = read_dataset_from_hdf5_with_dtype(file, "relative_errors", dtype=float32)
-            mean_absolute_relative_error: NDArray[float32]
             mean_absolute_relative_error = read_dataset_from_hdf5_with_dtype(file, "mean_absolute_relative_error", dtype=float32)
-            angular_momentum: NDArray[float32]
             angular_momentum = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
 
-            snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
             residuals=residuals,
@@ -118,7 +113,7 @@ class WrinkleResidualsData:
             relative_errors=relative_errors,
             mean_absolute_relative_error=mean_absolute_relative_error,
             angular_momentum=angular_momentum,
-            snapshot_data=snapshot_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -135,20 +130,20 @@ class WrinkleResidualsData:
             # General
             file.attrs["type"] = cls.DATA_FILE_TYPE
             file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
 
             file.create_dataset("residuals", data=self.residuals)
             file.create_dataset("sum_of_square_residuals", data=self.sum_of_square_residuals)
             file.create_dataset("relative_errors", data=self.relative_errors)
             file.create_dataset("mean_absolute_relative_error", data=self.mean_absolute_relative_error)
             file.create_dataset("radii", data=self.angular_momentum)
-            self.snapshot_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     # Convenience functions
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.residuals.shape[1]
 
     @property
     def num_spheres(self) -> int:

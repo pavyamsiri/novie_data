@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
@@ -11,13 +12,15 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from numpy.typing import NDArray
 
 
@@ -54,7 +57,11 @@ class ExponentialDiscProfileData:
         # General
         out_file.attrs["disc_scale_mass"] = self.scale_mass
         out_file.attrs["disc_scale_length"] = self.scale_length
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
@@ -69,7 +76,9 @@ class ExponentialDiscProfileData:
         scale_mass: float = get_float_attr_from_hdf5(in_file, "disc_scale_mass")
         scale_length: float = get_float_attr_from_hdf5(in_file, "disc_scale_length")
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, in_file.filename)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
+        )
         return cls(
             scale_mass=scale_mass,
             scale_length=scale_length,
@@ -96,8 +105,8 @@ class SurfaceDensityData:
         The number of bins of all axes.
     disc_profile : ExponentialDiscProfileData
         The parameters determining exponential profile of the disc.
-    snapshot_data : SnapshotData
-        The number of frames and per snapshot data.
+    name : str
+        The name of the dataset.
 
     Notes
     -----
@@ -112,10 +121,10 @@ class SurfaceDensityData:
     extent: float
     num_bins: int
     disc_profile: ExponentialDiscProfileData
-    snapshot_data: SnapshotData
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = Version("3.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -138,10 +147,6 @@ class SurfaceDensityData:
         if shape[0] != self.num_bins or shape[1] != self.num_bins:
             msg = f"Expected each slice to be ({self.num_bins}, {self.num_bins}) but got ({shape[0]}, {shape[1]})"
             raise ValueError(msg)
-        # Verify that the projection has the expected number of frames
-        if shape[2] != self.snapshot_data.num_frames:
-            msg = f"Expected the number of projection frames to be {self.snapshot_data.num_frames} but got {shape[2]}"
-            raise ValueError(msg)
 
         # Useful properties
         self.pixel_to_distance: float = 2 * self.extent / self.num_bins
@@ -154,7 +159,7 @@ class SurfaceDensityData:
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        """Deserialize surface density data from file.
+        """Deserialize data from file.
 
         Parameters
         ----------
@@ -173,6 +178,7 @@ class SurfaceDensityData:
 
             extent: float = get_float_attr_from_hdf5(file, "extent")
             num_bins: int = get_int_attr_from_hdf5(file, "num_bins")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
             projection_xy = read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=float32)
@@ -182,7 +188,6 @@ class SurfaceDensityData:
             flat_projection_xy = read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=float32)
 
             disc_profile = ExponentialDiscProfileData.load_from(file)
-            snapshot_data = SnapshotData.load_from(file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -193,11 +198,11 @@ class SurfaceDensityData:
             extent=extent,
             num_bins=num_bins,
             disc_profile=disc_profile,
-            snapshot_data=snapshot_data,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
-        """Serialize surface density data to disk.
+        """Serialize data to disk.
 
         Parameters
         ----------
@@ -212,13 +217,13 @@ class SurfaceDensityData:
             file.attrs["version"] = str(cls.VERSION)
             file.attrs["extent"] = self.extent
             file.attrs["num_bins"] = self.num_bins
+            file.attrs["name"] = self.name
 
             file.create_dataset("projection_xy", data=self.projection_xy)
             file.create_dataset("projection_xz", data=self.projection_xz)
             file.create_dataset("projection_yz", data=self.projection_yz)
             file.create_dataset("flat_projection_xy", data=self.flat_projection_xy)
             self.disc_profile.dump_into(file)
-            self.snapshot_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     # Convenience functions

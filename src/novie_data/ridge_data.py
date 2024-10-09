@@ -12,9 +12,13 @@ from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
 
-from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import (
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+)
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -32,7 +36,6 @@ class RidgeData:
     # Data products
     mass_density: NDArray[float32]
     number_density: NDArray[float32]
-    snapshot_data: SnapshotData
 
     # Metadata
     num_radial_bins: int
@@ -42,8 +45,10 @@ class RidgeData:
     min_velocity: float
     max_velocity: float
 
+    name: str
+
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
-    VERSION: ClassVar[Version] = Version("1.0.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -51,16 +56,6 @@ class RidgeData:
         same_shape = self.mass_density.shape == self.number_density.shape and self.mass_density.shape == self.number_density.shape
         if not same_shape:
             msg = "The colorings differ in shape!"
-            raise ValueError(msg)
-
-        actual_shape = self.mass_density.shape
-        expected_shape = (
-            self.num_velocity_bins,
-            self.num_radial_bins,
-            self.snapshot_data.num_frames,
-        )
-        if actual_shape != expected_shape:
-            msg = f"Expected the colorings to have the shape {expected_shape} but got {actual_shape}."
             raise ValueError(msg)
 
     @classmethod
@@ -88,23 +83,23 @@ class RidgeData:
             max_radius: float = get_float_attr_from_hdf5(file, "max_radius")
             min_velocity: float = get_float_attr_from_hdf5(file, "min_velocity")
             max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
+            name: str = get_str_attr_from_hdf5(file, "name")
 
             # Arrays
             mass_density = read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=float32)
             number_density = read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=float32)
 
-            snapshot_data = SnapshotData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
             mass_density=mass_density,
             number_density=number_density,
-            snapshot_data=snapshot_data,
             num_radial_bins=num_radial_bins,
             num_velocity_bins=num_velocity_bins,
             min_velocity=min_velocity,
             max_velocity=max_velocity,
             min_radius=min_radius,
             max_radius=max_radius,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -127,10 +122,10 @@ class RidgeData:
             file.attrs["max_radius"] = self.max_radius
             file.attrs["min_velocity"] = self.min_velocity
             file.attrs["max_velocity"] = self.max_velocity
+            file.attrs["name"] = self.name
 
             file.create_dataset("mass_density", data=self.mass_density)
             file.create_dataset("number_density", data=self.number_density)
-            self.snapshot_data.dump_into(file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     # Convenience functions
@@ -138,7 +133,7 @@ class RidgeData:
     @property
     def num_frames(self) -> int:
         """int: The number of frames."""
-        return self.snapshot_data.num_frames
+        return self.mass_density.shape[2]
 
     def get_radial_limits(self) -> tuple[float, float]:
         """Return the radial limits.

@@ -11,10 +11,8 @@ from h5py import File as Hdf5File
 from numpy import float32, uint32
 from packaging.version import Version
 
-from .serde.accessors import get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
+from .serde.accessors import get_str_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
-from .snapshot_data import SnapshotData
-from .solar_circle_data import SolarCircleData
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -36,22 +34,19 @@ class SpiralArmCoverageData:
         The number of covered arm pixels.
     num_total_arm_pixels : NDArray[uint32]
         The total number of arm pixels.
-    solar_circle_data : SolarCircleData
-        The solar circle data.
-    snapshot_data : SnapshotData
-        The data describing each snapshot.
+    name : str
+        The name of the dataset.
 
     """
 
     num_covered_arm_pixels: NDArray[uint32]
     num_total_arm_pixels: NDArray[uint32]
     covered_arm_normalised_densities: NDArray[float32]
-    solar_circle_data: SolarCircleData
-    snapshot_data: SnapshotData
     arm_names: Sequence[str]
+    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "SpiralArmCoverage"
-    VERSION: ClassVar[Version] = Version("1.1.0")
+    VERSION: ClassVar[Version] = Version("2.0.0")
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
@@ -70,9 +65,6 @@ class SpiralArmCoverageData:
         if self.covered_arm_normalised_densities.shape != common_shape:
             current_shape = self.covered_arm_normalised_densities.shape
             msg = f"Expected normalised densities' array shape to be {common_shape} but got {current_shape}"
-            raise ValueError(msg)
-        if num_frames != self.snapshot_data.num_frames:
-            msg = "Expected the snapshot data to have the same number of frames as the other arrays."
             raise ValueError(msg)
         if len(self.arm_names) != num_arms:
             msg = f"Expected the number of arms to be {num_arms} but got {len(self.arm_names)}"
@@ -110,14 +102,13 @@ class SpiralArmCoverageData:
             verify_file_type_from_hdf5(in_file, cls.DATA_FILE_TYPE)
             verify_file_version_from_hdf5(in_file, cls.VERSION)
 
+            name: str = get_str_attr_from_hdf5(in_file, "name")
             num_covered_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_covered_arm_pixels", dtype=uint32)
             num_total_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_total_arm_pixels", dtype=uint32)
             covered_arm_normalised_densities = read_dataset_from_hdf5_with_dtype(
                 in_file, "covered_arm_normalised_densities", dtype=float32
             )
             arm_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "arm_names")
-            snapshot_data = SnapshotData.load_from(in_file)
-            solar_circle_data = SolarCircleData.load_from(in_file)
         log.info(
             "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
             cls.__name__,
@@ -126,10 +117,9 @@ class SpiralArmCoverageData:
         return cls(
             num_covered_arm_pixels=num_covered_arm_pixels,
             num_total_arm_pixels=num_total_arm_pixels,
-            solar_circle_data=solar_circle_data,
-            snapshot_data=snapshot_data,
             covered_arm_normalised_densities=covered_arm_normalised_densities,
             arm_names=arm_names,
+            name=name,
         )
 
     def dump(self, path: Path) -> None:
@@ -146,13 +136,12 @@ class SpiralArmCoverageData:
             # General
             out_file.attrs["type"] = cls.DATA_FILE_TYPE
             out_file.attrs["version"] = str(cls.VERSION)
+            out_file.attrs["name"] = self.name
 
             out_file.create_dataset("num_covered_arm_pixels", data=self.num_covered_arm_pixels)
             out_file.create_dataset("num_total_arm_pixels", data=self.num_total_arm_pixels)
             out_file.create_dataset("covered_arm_normalised_densities", data=self.covered_arm_normalised_densities)
             out_file.create_dataset("arm_names", data=self.arm_names)
-            self.snapshot_data.dump_into(out_file)
-            self.solar_circle_data.dump_into(out_file)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     def get_starting_angles_deg(self) -> NDArray[float32]:

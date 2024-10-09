@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Self
 
 from h5py import File as Hdf5File
@@ -36,7 +37,7 @@ class SphericalNeighbourhoodData:
             msg = f"Expected the radius to be positive but got {self.radius} kpc."
 
     def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize snapshot data to file.
+        """Deserialize data to disk.
 
         Parameters
         ----------
@@ -47,11 +48,15 @@ class SphericalNeighbourhoodData:
         # General
         out_file.attrs["num_spheres"] = self.num_spheres
         out_file.attrs["sphere_radius"] = self.radius
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", type(self).__name__, out_file.filename)
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            type(self).__name__,
+            Path(out_file.filename).absolute(),
+        )
 
     @classmethod
     def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize snapshot data from file.
+        """Serialize data from disk.
 
         Parameters
         ----------
@@ -65,7 +70,7 @@ class SphericalNeighbourhoodData:
         log.info(
             "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
             cls.__name__,
-            in_file.filename,
+            Path(in_file.filename).absolute(),
         )
         return cls(
             num_spheres=num_spheres,

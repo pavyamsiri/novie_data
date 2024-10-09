@@ -55,8 +55,8 @@ class SnapshotData:
         if times_dimension != 1:
             msg = f"Expected `times` to be a 1D array but it is {times_dimension}D instead!"
             raise ValueError(msg)
-        num_times: int = len(self.times)
-        num_codes: int = len(self.codes)
+        num_times: int = len(times)
+        num_codes: int = len(codes)
 
         if num_times != num_codes:
             msg = f"The number of times {num_times} is not equal to the number of snapshot names {num_codes}!"

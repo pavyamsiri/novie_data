@@ -6,6 +6,7 @@ from .cluster_data import SpiralClusterData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
 from .file_types import NovieFileType, get_novie_file_type
+from .interface import NovieData
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
@@ -33,6 +34,7 @@ __all__ = [
     "SphericalNeighbourhoodData",
     "PerturberData",
     "RidgeData",
+    "NovieData",
 ]
 
-__version__: str = "1.0.1"
+__version__: str = "1.1.0"

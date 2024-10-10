@@ -1,11 +1,16 @@
 """Definition of the NovieData protocol."""
 
 from pathlib import Path
-from typing import Protocol, Self
+from typing import ClassVar, Protocol, Self
+
+from packaging.version import Version
 
 
 class NovieData(Protocol):
     """Definition of novie data that can be directly read and written to disk."""
+
+    DATA_FILE_TYPE: ClassVar[str]
+    VERSION: ClassVar[Version]
 
     @classmethod
     def load(cls, path: Path) -> Self:

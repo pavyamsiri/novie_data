@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "novie-data"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "h5py" },
@@ -146,9 +146,10 @@ wheels = [
 
 [[package]]
 name = "scipy-stubs"
-version = "1.4.1a3"
-source = { git = "https://github.com/jorenham/scipy-stubs.git#ce78eb063454f930ab0f5cee7bab4ac3affd40d9" }
+version = "1.14.1.0.dev0"
+source = { git = "https://github.com/jorenham/scipy-stubs.git#eb25cb88e8217070458fed2e44b764183b85ac93" }
 dependencies = [
+    { name = "numpy" },
     { name = "optype" },
     { name = "scipy" },
 ]

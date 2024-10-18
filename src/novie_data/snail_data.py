@@ -147,13 +147,6 @@ class SnailData:
             msg = "The colorings differ in shape!"
             raise ValueError(msg)
 
-        # TODO(pavyamsiri): Expose this parameter
-        blur_width: float = 4
-        mean_density: NDArray[float32] = gaussian_filter(self.surface_density, sigma=(blur_width, blur_width), axes=(0, 1))
-        norm_density = np.copy(self.surface_density)
-        norm_density[norm_density != 0] /= mean_density[norm_density != 0]
-        self.overdensity: NDArray[float32] = (norm_density - 1).astype(float32)
-
     @classmethod
     def load(cls, path: Path) -> Self:
         """Deserialize phase spiral data from file.
@@ -317,6 +310,32 @@ class SnailData:
             case _:
                 assert_never(coloring)
         return float(np.nanmax(array[array != 0]))
+
+    @property
+    def overdensity(self) -> NDArray[float32]:
+        """NDArray[float32]: The overdensity map blurred using a width of 4 bins."""
+        return self.get_overdensity(4)
+
+    def get_overdensity(self, blur_width: float) -> NDArray[float32]:
+        """Return the overdensity map given a blurring width in units of bins.
+
+        Parameters
+        ----------
+        blur_width : float
+            The blur width for both axes in number of bins.
+
+        Returns
+        -------
+        overdensity : NDArray[float32]
+            The overdensity.
+
+        """
+        mean_density: NDArray[float32] = gaussian_filter(
+            self.surface_density, sigma=(blur_width, blur_width), axes=(0, 1)
+        ).astype(float32)
+        norm_density = np.copy(self.surface_density)
+        norm_density[norm_density != 0] /= mean_density[norm_density != 0]
+        return (norm_density - 1).astype(float32)
 
     def get_dummy_data(self) -> NDArray[float32]:
         """Return an array of ones with the same shape as the grid.

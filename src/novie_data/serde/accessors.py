@@ -9,7 +9,7 @@ import numpy as np
 from h5py import Dataset as Hdf5Dataset
 from h5py import File as Hdf5File
 
-from novie_data._type_utils import AnyArray, AnyArrayWithDType, require_dtype
+from novie_data._type_utils import AnyArray, Array, require_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -48,7 +48,7 @@ def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[AnyArray,
     return array, value
 
 
-def read_dataset_from_hdf5_with_dtype(file: Hdf5File, name: str, *, dtype: type[_ST]) -> AnyArrayWithDType[_ST]:
+def read_dataset_from_hdf5_with_dtype(file: Hdf5File, name: str, *, dtype: type[_ST]) -> Array[_ST]:
     """Read a dataset from a hdf5 file.
 
     Parameters

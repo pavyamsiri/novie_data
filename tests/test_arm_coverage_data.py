@@ -1,4 +1,5 @@
-"""Test snapshot data."""
+"""Test arm coverage data."""
+# TODO(pavyamsiri): Write tests for invalid inputs
 
 from pathlib import Path
 
@@ -15,9 +16,9 @@ def test_arm_coverage_data_protocol() -> None:
 
 def test_arm_coverage_data_init() -> None:
     """Test the constructor."""
-    num_neighbourhoods = 7
-    num_arms = 4
-    num_frames = 20
+    num_neighbourhoods: int = 7
+    num_arms: int = 4
+    num_frames: int = 20
 
     num_covered_arm_pixels = np.full((num_neighbourhoods, num_arms, num_frames), 0, dtype=np.uint32)
     num_total_arm_pixels = np.full((num_neighbourhoods, num_arms, num_frames), 0, dtype=np.uint32)
@@ -44,9 +45,9 @@ def test_arm_coverage_data_serde(tmp_path: Path) -> None:
 
     """
     output_path = tmp_path / "snapshot.hdf5"
-    num_neighbourhoods = 7
-    num_arms = 4
-    num_frames = 20
+    num_neighbourhoods: int = 7
+    num_arms: int = 4
+    num_frames: int = 20
 
     num_covered_arm_pixels = np.full((num_neighbourhoods, num_arms, num_frames), 0, dtype=np.uint32)
     num_total_arm_pixels = np.full((num_neighbourhoods, num_arms, num_frames), 0, dtype=np.uint32)

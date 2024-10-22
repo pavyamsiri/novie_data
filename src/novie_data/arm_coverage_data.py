@@ -10,6 +10,8 @@ from h5py import File as Hdf5File
 from numpy import float32, uint32
 from packaging.version import Version
 
+from novie_data.errors import InconsistentArrayLengthError, verify_arrays_have_same_shape
+
 from .serde.accessors import get_str_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
@@ -74,23 +76,16 @@ class SpiralArmCoverageData:
         # Verify that the arrays the correct size
         num_neighbourhoods: int = self.num_covered_arm_pixels.shape[0]
         num_arms: int = self.num_covered_arm_pixels.shape[1]
-        num_frames: int = self.num_covered_arm_pixels.shape[2]
 
-        common_shape: tuple[int, int, int] = (num_neighbourhoods, num_arms, num_frames)
-        if self.num_covered_arm_pixels.shape != common_shape:
-            msg = f"Expected covered arm pixels' array shape to be {common_shape} but got {self.num_covered_arm_pixels.shape}"
-            raise ValueError(msg)
-        if self.num_total_arm_pixels.shape != common_shape:
-            msg = f"Expected total arm pixels' array shape to be {common_shape} but got {self.num_total_arm_pixels.shape}"
-            raise ValueError(msg)
-        if self.covered_arm_normalised_densities.shape != common_shape:
-            current_shape = self.covered_arm_normalised_densities.shape
-            msg = f"Expected normalised densities' array shape to be {common_shape} but got {current_shape}"
-            raise ValueError(msg)
+        verify_arrays_have_same_shape(
+            [self.num_covered_arm_pixels, self.num_total_arm_pixels, self.covered_arm_normalised_densities],
+            msg="Expected the pixel arrays and density array to have same shape.",
+        )
         if len(self.arm_names) != num_arms:
             msg = f"Expected the number of arms to be {num_arms} but got {len(self.arm_names)}"
-            raise ValueError(msg)
+            raise InconsistentArrayLengthError(msg)
 
+        # Derived arrays
         self.arm_coverage: NDArray[float32] = np.copy(self.num_covered_arm_pixels).astype(float32)
         self.arm_coverage[self.num_total_arm_pixels > 0] /= self.num_total_arm_pixels[self.num_total_arm_pixels > 0]
 

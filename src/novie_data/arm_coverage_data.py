@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
@@ -24,7 +23,6 @@ if TYPE_CHECKING:
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class SpiralArmCoverageData:
     """Data class to store spiral arm coverage.
 
@@ -39,17 +37,40 @@ class SpiralArmCoverageData:
 
     """
 
-    num_covered_arm_pixels: NDArray[uint32]
-    num_total_arm_pixels: NDArray[uint32]
-    covered_arm_normalised_densities: NDArray[float32]
-    arm_names: Sequence[str]
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "SpiralArmCoverage"
     VERSION: ClassVar[Version] = Version("2.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        num_covered_arm_pixels: NDArray[uint32],
+        num_total_arm_pixels: NDArray[uint32],
+        covered_arm_normalised_densities: NDArray[float32],
+        arm_names: Sequence[str],
+    ) -> None:
+        """Perform post-initialisation verification.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        num_covered_arm_pixels : NDArray[uint32]
+            The number of covered arm pixels.
+        num_total_arm_pixels : NDArray[uint32]
+            The total number of arm pixels.
+        covered_arm_normalised_densities : NDArray[float32]
+            The mean normalised density within the covered region.
+        arm_names : Sequence[str]
+            The name of each arm.
+
+        """
+        self.name: str = name
+        self.num_covered_arm_pixels: NDArray[uint32] = num_covered_arm_pixels
+        self.num_total_arm_pixels: NDArray[uint32] = num_total_arm_pixels
+        self.covered_arm_normalised_densities: NDArray[float32] = covered_arm_normalised_densities
+        self.arm_names: Sequence[str] = arm_names
+
         # Verify that the arrays the correct size
         num_neighbourhoods: int = self.num_covered_arm_pixels.shape[0]
         num_arms: int = self.num_covered_arm_pixels.shape[1]
@@ -82,6 +103,34 @@ class SpiralArmCoverageData:
 
         self.num_arms: int = num_arms
         self.num_neighbourhoods: int = num_neighbourhoods
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= len(self.arm_names) == len(other.arm_names)
+        equality &= all(this_name == other_name for this_name, other_name in zip(self.arm_names, other.arm_names, strict=False))
+        equality &= np.all(self.num_covered_arm_pixels == other.num_covered_arm_pixels)
+        equality &= np.all(self.num_total_arm_pixels == other.num_total_arm_pixels)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

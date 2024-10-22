@@ -57,10 +57,6 @@ class SnapshotData:
             The time associated with each snapshot in Myr.
 
         """
-        times_dimension = len(times.shape)
-        if times_dimension != 1:
-            msg = f"Expected `times` to be a 1D array but it is {times_dimension}D instead!"
-            raise ValueError(msg)
         num_times: int = len(times)
         num_codes: int = len(codes)
 

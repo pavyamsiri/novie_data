@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from novie_data.errors import NegativeValueError
 from novie_data.interface import NovieData
-from novie_data.solar_circle_data import NegativeSolarRadiusError, SolarCircleData
+from novie_data.solar_circle_data import SolarCircleData
 
 
 def test_solar_circle_data_protocol() -> None:
@@ -21,7 +22,7 @@ def test_solar_circle_data_init() -> None:
 
 def test_solar_circle_data_init_negative_solar_radius() -> None:
     """Test the constructor raises an error on negative solar radii values."""
-    with pytest.raises(NegativeSolarRadiusError):
+    with pytest.raises(NegativeValueError, match="solar radius"):
         _ = SolarCircleData(name="test", omega=0.0, solar_radius=-1.0)
 
 

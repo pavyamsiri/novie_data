@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32, uint32
 from packaging.version import Version
 
+from novie_data._type_utils import Array3D, verify_array_is_3d
 from novie_data.errors import InconsistentArrayLengthError, verify_arrays_have_same_shape
 
 from .serde.accessors import get_str_attr_from_hdf5, get_string_sequence_from_hdf5, read_dataset_from_hdf5_with_dtype
@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from numpy.typing import NDArray
 
+_Array3D_f32: TypeAlias = Array3D[np.float32]
+_Array3D_u32: TypeAlias = Array3D[np.uint32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -30,12 +31,16 @@ class SpiralArmCoverageData:
 
     Attributes
     ----------
-    num_covered_arm_pixels : NDArray[uint32]
-        The number of covered arm pixels.
-    num_total_arm_pixels : NDArray[uint32]
-        The total number of arm pixels.
     name : str
         The name of the dataset.
+    num_covered_arm_pixels : Array3D[u32]
+        The number of covered arm pixels.
+    num_total_arm_pixels : Array3D[u32]
+        The total number of arm pixels.
+    covered_arm_normalised_densities : Array3D[f32]
+        The mean normalised density within the covered region.
+    arm_names : Sequence[str]
+        The name of each arm.
 
     """
 
@@ -46,9 +51,9 @@ class SpiralArmCoverageData:
         self,
         *,
         name: str,
-        num_covered_arm_pixels: NDArray[uint32],
-        num_total_arm_pixels: NDArray[uint32],
-        covered_arm_normalised_densities: NDArray[float32],
+        num_covered_arm_pixels: _Array3D_u32,
+        num_total_arm_pixels: _Array3D_u32,
+        covered_arm_normalised_densities: _Array3D_f32,
         arm_names: Sequence[str],
     ) -> None:
         """Perform post-initialisation verification.
@@ -57,20 +62,20 @@ class SpiralArmCoverageData:
         ----------
         name : str
             The name of the dataset.
-        num_covered_arm_pixels : NDArray[uint32]
+        num_covered_arm_pixels : Array3D[u32]
             The number of covered arm pixels.
-        num_total_arm_pixels : NDArray[uint32]
+        num_total_arm_pixels : Array3D[u32]
             The total number of arm pixels.
-        covered_arm_normalised_densities : NDArray[float32]
+        covered_arm_normalised_densities : Array3D[f32]
             The mean normalised density within the covered region.
         arm_names : Sequence[str]
             The name of each arm.
 
         """
         self.name: str = name
-        self.num_covered_arm_pixels: NDArray[uint32] = num_covered_arm_pixels
-        self.num_total_arm_pixels: NDArray[uint32] = num_total_arm_pixels
-        self.covered_arm_normalised_densities: NDArray[float32] = covered_arm_normalised_densities
+        self.num_covered_arm_pixels: _Array3D_u32 = num_covered_arm_pixels
+        self.num_total_arm_pixels: _Array3D_u32 = num_total_arm_pixels
+        self.covered_arm_normalised_densities: _Array3D_f32 = covered_arm_normalised_densities
         self.arm_names: Sequence[str] = arm_names
 
         # Verify that the arrays the correct size
@@ -86,15 +91,15 @@ class SpiralArmCoverageData:
             raise InconsistentArrayLengthError(msg)
 
         # Derived arrays
-        self.arm_coverage: NDArray[float32] = np.copy(self.num_covered_arm_pixels).astype(float32)
+        self.arm_coverage: _Array3D_f32 = np.copy(self.num_covered_arm_pixels).astype(np.float32)
         self.arm_coverage[self.num_total_arm_pixels > 0] /= self.num_total_arm_pixels[self.num_total_arm_pixels > 0]
 
         num_total_arm_pixels_sum = np.sum(self.num_total_arm_pixels, axis=1)
-        self.average_total_arm_coverage: NDArray[float32] = np.sum(self.num_covered_arm_pixels, axis=1).astype(float32)
+        self.average_total_arm_coverage: _Array3D_f32 = np.sum(self.num_covered_arm_pixels, axis=1).astype(np.float32)
         self.average_total_arm_coverage[num_total_arm_pixels_sum > 0] /= num_total_arm_pixels_sum[num_total_arm_pixels_sum > 0]
-        self.average_arm_coverage: NDArray[float32] = np.mean(self.arm_coverage, axis=1)
+        self.average_arm_coverage: _Array3D_f32 = np.mean(self.arm_coverage, axis=1)
 
-        self.average_covered_arm_normalised_densities: NDArray[float32] = np.mean(self.covered_arm_normalised_densities, axis=1)
+        self.average_covered_arm_normalised_densities: _Array3D_f32 = np.mean(self.covered_arm_normalised_densities, axis=1)
 
         self.num_arms: int = num_arms
         self.num_neighbourhoods: int = num_neighbourhoods
@@ -147,10 +152,14 @@ class SpiralArmCoverageData:
             verify_file_version_from_hdf5(in_file, cls.VERSION)
 
             name: str = get_str_attr_from_hdf5(in_file, "name")
-            num_covered_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_covered_arm_pixels", dtype=uint32)
-            num_total_arm_pixels = read_dataset_from_hdf5_with_dtype(in_file, "num_total_arm_pixels", dtype=uint32)
-            covered_arm_normalised_densities = read_dataset_from_hdf5_with_dtype(
-                in_file, "covered_arm_normalised_densities", dtype=float32
+            num_covered_arm_pixels = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(in_file, "num_covered_arm_pixels", dtype=np.uint32)
+            )
+            num_total_arm_pixels = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(in_file, "num_total_arm_pixels", dtype=np.uint32)
+            )
+            covered_arm_normalised_densities = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(in_file, "covered_arm_normalised_densities", dtype=np.float32)
             )
             arm_names: Sequence[str] = get_string_sequence_from_hdf5(in_file, "arm_names")
         log.info(
@@ -188,12 +197,12 @@ class SpiralArmCoverageData:
             out_file.create_dataset("arm_names", data=self.arm_names)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    def get_starting_angles_deg(self) -> NDArray[float32]:
+    def get_starting_angles_deg(self) -> _Array3D_f32:
         """Return the angle of the start locations in degrees.
 
         Returns
         -------
-        starting_angles : NDArray[float32]
+        starting_angles : _Array3D_f32
             The angle of the start locations in degrees.
 
         """

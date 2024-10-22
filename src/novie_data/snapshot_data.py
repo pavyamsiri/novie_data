@@ -10,7 +10,7 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 
 from novie_data._type_utils import Array1D, verify_array_is_1d
-from novie_data.errors import InconsistentArrayLengthError
+from novie_data.errors import verify_arrays_have_same_shape
 
 from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
@@ -60,9 +60,9 @@ class SnapshotData:
         num_times: int = len(times)
         num_codes: int = len(codes)
 
-        if num_times != num_codes:
-            msg = f"The number of times {num_times} is not equal to the number of snapshot names {num_codes}!"
-            raise InconsistentArrayLengthError(msg)
+        verify_arrays_have_same_shape(
+            [codes, times], msg=f"The number of times {num_times} is not equal to the number of snapshot names {num_codes}!"
+        )
 
         self.name: str = name
         self.codes: _Array1D_u32 = codes

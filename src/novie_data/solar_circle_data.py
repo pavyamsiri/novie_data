@@ -15,6 +15,11 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
+
+class NegativeSolarRadiusError(ValueError):
+    """Validation error for when the given solar radius is negative."""
+
+
 log: logging.Logger = logging.getLogger(__name__)
 
 
@@ -44,7 +49,7 @@ class SolarCircleData:
         """Perform post-initialisation verification."""
         if self.solar_radius <= 0:
             msg = f"Expected solar radius to be positive but got {self.solar_radius} kpc."
-            raise ValueError(msg)
+            raise NegativeSolarRadiusError(msg)
 
     def dump(self, path: Path) -> None:
         """Serialize data to disk.

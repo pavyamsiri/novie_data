@@ -10,6 +10,8 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
+from novie_data.errors import verify_arrays_are_consistent, verify_arrays_have_correct_length
+
 from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
@@ -62,16 +64,13 @@ class PerturberData:
         self.mass: NDArray[float32] = mass
 
         # Validate projection
-        num_frames: int = self.position.shape[1]
-        if self.position.shape[0] != 3:
-            msg = f"Expected the position vector to have the shape (3, {num_frames}) but got {self.position.shape}."
-            raise ValueError(msg)
-        if self.velocity.shape[0] != 3 or self.velocity.shape[1] != num_frames:
-            msg = f"Expected the velocity vector to have the shape (3, {num_frames}) but got {self.velocity.shape}."
-            raise ValueError(msg)
-        if self.mass.shape[0] != num_frames:
-            msg = f"Expected the mass array to have the shape ({num_frames}) but got {self.mass.shape}."
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.position, 0), (self.velocity, 0)], 3, msg="Expected the position/velocity vectors to have 3 rows."
+        )
+        verify_arrays_are_consistent(
+            [(self.position, 1), (self.velocity, 1), (self.mass, 0)],
+            msg="Expected position, velocity and mass to have the same number of frames!",
+        )
 
     def __eq__(self, other: object, /) -> bool:
         """Compare for equality.

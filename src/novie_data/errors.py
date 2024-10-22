@@ -15,6 +15,10 @@ class InconsistentArrayLengthError(ValueError):
     """Validation error for when the given arrays differ in length on specific axes."""
 
 
+class WrongArrayLengthError(ValueError):
+    """Validation error for when the given arrays have the wrong length on specific axes."""
+
+
 class InconsistentArrayShapeError(InconsistentArrayLengthError):
     """Validation error for when the given arrays differ in shape."""
 
@@ -68,3 +72,20 @@ def verify_arrays_are_consistent(array_axes: Sequence[tuple[AnyArray, int]], *, 
         return
     if lengths.count(lengths[0]) != len(lengths):
         raise InconsistentArrayLengthError(msg)
+
+
+def verify_arrays_have_correct_length(array_axes: Sequence[tuple[AnyArray, int]], expected_length: int, *, msg: str) -> None:
+    """Verify that the given value is non-negative.
+
+    Parameters
+    ----------
+    array_axes : Sequence[tuple[AnyArray, int]]
+        A sequence of tuples containing the arrays to check for consistency and the axis in which to check.
+    expected_length : int
+        The expected length.
+    msg : str
+        The message to display on failure.
+
+    """
+    if not all(array.shape[axis] == expected_length for array, axis in array_axes):
+        raise WrongArrayLengthError(msg)

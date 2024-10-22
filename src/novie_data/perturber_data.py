@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
+import numpy as np
 from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class PerturberData:
     """The position, velocity and mass of a single perturber.
 
@@ -39,16 +38,29 @@ class PerturberData:
 
     """
 
-    position: NDArray[float32]
-    velocity: NDArray[float32]
-    mass: NDArray[float32]
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "Perturber"
     VERSION: ClassVar[Version] = Version("2.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(self, *, name: str, position: NDArray[float32], velocity: NDArray[float32], mass: NDArray[float32]) -> None:
+        """Perform post-initialisation verification.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        position : NDArray[float]
+            The 3D position at every frame in kpc.
+        velocity : NDArray[float]
+            The 3D velocity at every frame in km/s.
+        mass : NDArray[float]
+            The mass at every frame in Msol.
+
+        """
+        self.name: str = name
+        self.position: NDArray[float32] = position
+        self.velocity: NDArray[float32] = velocity
+        self.mass: NDArray[float32] = mass
+
         # Validate projection
         num_frames: int = self.position.shape[1]
         if self.position.shape[0] != 3:
@@ -60,6 +72,33 @@ class PerturberData:
         if self.mass.shape[0] != num_frames:
             msg = f"Expected the mass array to have the shape ({num_frames}) but got {self.mass.shape}."
             raise ValueError(msg)
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= np.all(self.position == other.position)
+        equality &= np.all(self.velocity == other.velocity)
+        equality &= np.all(self.mass == other.mass)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

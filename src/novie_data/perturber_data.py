@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
 from packaging.version import Version
 
+from novie_data._type_utils import Array1D, Array2D, verify_array_is_1d, verify_array_is_2d
 from novie_data.errors import verify_arrays_are_consistent, verify_arrays_have_correct_length
 
 from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
@@ -18,8 +18,9 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy.typing import NDArray
 
+_Array1D_f32: TypeAlias = Array1D[np.float32]
+_Array2D_f32: TypeAlias = Array2D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -29,39 +30,39 @@ class PerturberData:
 
     Attributes
     ----------
+    name : str
+        The name of the dataset.
     position : NDArray[float]
         The 3D position at every frame in kpc.
     velocity : NDArray[float]
         The 3D velocity at every frame in km/s.
     mass : NDArray[float]
         The mass at every frame in Msol.
-    name : str
-        The name of the dataset.
 
     """
 
     DATA_FILE_TYPE: ClassVar[str] = "Perturber"
     VERSION: ClassVar[Version] = Version("2.0.0")
 
-    def __init__(self, *, name: str, position: NDArray[float32], velocity: NDArray[float32], mass: NDArray[float32]) -> None:
+    def __init__(self, *, name: str, position: _Array2D_f32, velocity: _Array2D_f32, mass: _Array1D_f32) -> None:
         """Perform post-initialisation verification.
 
         Parameters
         ----------
         name : str
             The name of the dataset.
-        position : NDArray[float]
+        position : Array2D[f32]
             The 3D position at every frame in kpc.
-        velocity : NDArray[float]
+        velocity : Array2D[f32]
             The 3D velocity at every frame in km/s.
-        mass : NDArray[float]
+        mass : Array1D[f32]
             The mass at every frame in Msol.
 
         """
         self.name: str = name
-        self.position: NDArray[float32] = position
-        self.velocity: NDArray[float32] = velocity
-        self.mass: NDArray[float32] = mass
+        self.position: _Array2D_f32 = position
+        self.velocity: _Array2D_f32 = velocity
+        self.mass: _Array1D_f32 = mass
 
         # Validate projection
         verify_arrays_have_correct_length(
@@ -121,9 +122,9 @@ class PerturberData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
-            position = read_dataset_from_hdf5_with_dtype(file, "position", dtype=float32)
-            velocity = read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=float32)
-            mass = read_dataset_from_hdf5_with_dtype(file, "mass", dtype=float32)
+            position = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "position", dtype=np.float32))
+            velocity = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=np.float32))
+            mass = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "mass", dtype=np.float32))
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(

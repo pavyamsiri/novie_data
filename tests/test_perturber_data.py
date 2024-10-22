@@ -1,4 +1,4 @@
-"""Test snapshot data."""
+"""Test perturber data."""
 
 from pathlib import Path
 

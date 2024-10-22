@@ -72,6 +72,32 @@ class SnapshotData:
         self.times: _Array1D_f32 = times
         self.num_frames: int = num_times
 
+    def __eq__(self, other: object) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= np.all(self.codes == other.codes)
+        equality &= np.all(self.times == other.times)
+        return bool(equality)
+
     def snapshot_names(self) -> Iterator[str]:
         """Yield the snapshot names.
 

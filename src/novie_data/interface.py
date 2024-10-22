@@ -1,11 +1,12 @@
 """Definition of the NovieData protocol."""
 
 from pathlib import Path
-from typing import ClassVar, Protocol, Self
+from typing import ClassVar, Protocol, Self, runtime_checkable
 
 from packaging.version import Version
 
 
+@runtime_checkable
 class NovieData(Protocol):
     """Definition of novie data that can be directly read and written to disk."""
 

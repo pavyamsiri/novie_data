@@ -46,7 +46,11 @@ ignore = [
 ]
 
 [tool.uv]
-dev-dependencies = ["h5py-stubs", "scipy-stubs"]
+dev-dependencies = [
+    "h5py-stubs",
+    "pytest>=8.3.3",
+    "scipy-stubs",
+]
 
 [tool.uv.sources]
 scipy-stubs = { git = "https://github.com/jorenham/scipy-stubs.git" }

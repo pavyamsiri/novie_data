@@ -85,12 +85,13 @@ class ExponentialDiscProfileData:
         )
 
 
-@dataclass
 class SurfaceDensityData:
     """The surface densities of a snapshot in all three cardinal projections.
 
     Attributes
     ----------
+    name : str
+        The name of the dataset.
     projection_xy : NDArray[float]
         The surface density in the xy projection.
     projection_xz : NDArray[float]
@@ -105,8 +106,6 @@ class SurfaceDensityData:
         The number of bins of all axes.
     disc_profile : ExponentialDiscProfileData
         The parameters determining exponential profile of the disc.
-    name : str
-        The name of the dataset.
 
     Notes
     -----
@@ -114,20 +113,56 @@ class SurfaceDensityData:
 
     """
 
-    projection_xy: NDArray[float32]
-    projection_xz: NDArray[float32]
-    projection_yz: NDArray[float32]
-    flat_projection_xy: NDArray[float32]
-    extent: float
-    num_bins: int
-    disc_profile: ExponentialDiscProfileData
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
     VERSION: ClassVar[Version] = Version("3.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        projection_xy: NDArray[float32],
+        projection_xz: NDArray[float32],
+        projection_yz: NDArray[float32],
+        flat_projection_xy: NDArray[float32],
+        extent: float,
+        num_bins: int,
+        disc_profile: ExponentialDiscProfileData,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        projection_xy : NDArray[float]
+            The surface density in the xy projection.
+        projection_xz : NDArray[float]
+            The surface density in the xz projection.
+        projection_yz : NDArray[float]
+            The surface density in the yz projection.
+        flat_projection_xy : NDArray[float]
+            The flattened surface density in the xy projection.
+        extent : float
+            The half-width of all axes.
+        num_bins : int
+            The number of bins of all axes.
+        disc_profile : ExponentialDiscProfileData
+            The parameters determining exponential profile of the disc.
+
+        Notes
+        -----
+        All projections are 3D arrays of floats with the shape `(num_bins, num_bins, num_frames)`.
+
+        """
+        self.name: str = name
+        self.projection_xy: NDArray[float32] = projection_xy
+        self.projection_xz: NDArray[float32] = projection_xz
+        self.projection_yz: NDArray[float32] = projection_yz
+        self.flat_projection_xy: NDArray[float32] = flat_projection_xy
+        self.extent: float = extent
+        self.num_bins: int = num_bins
+        self.disc_profile: ExponentialDiscProfileData = disc_profile
+
         # Verify that the projections are the same size
         same_shape = (
             self.projection_xy.shape == self.projection_xz.shape
@@ -156,6 +191,37 @@ class SurfaceDensityData:
             where=self.flat_projection_xy[:, :, 0][:, :, None] != 0,
         )
         self.density_contrast: NDArray[float32] = self.overdensity - 1
+
+    def __eq__(self, other: object) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.extent == other.extent
+        equality &= self.num_bins == other.num_bins
+        equality &= self.disc_profile == other.disc_profile
+        equality &= np.all(self.projection_xy == other.projection_xy)
+        equality &= np.all(self.projection_xz == other.projection_xz)
+        equality &= np.all(self.projection_yz == other.projection_yz)
+        equality &= np.all(self.flat_projection_xy == other.flat_projection_xy)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

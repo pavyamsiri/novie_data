@@ -1,6 +1,6 @@
 [project]
 name = "novie-data"
-version = "1.1.0"
+version = "2.0.0"
 description = "Data type definitions for `novie` files."
 readme = "README.md"
 requires-python = ">=3.12"

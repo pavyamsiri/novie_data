@@ -12,7 +12,12 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 
 from novie_data._type_utils import Array1D, Array2D, Array3D, Array4D, verify_array_is_1d, verify_array_is_3d, verify_array_is_4d
-from novie_data.errors import verify_arrays_have_correct_length, verify_value_is_nonnegative, verify_value_is_positive
+from novie_data.errors import (
+    verify_arrays_have_correct_length,
+    verify_arrays_have_same_shape,
+    verify_value_is_nonnegative,
+    verify_value_is_positive,
+)
 
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -316,6 +321,9 @@ class CorrugationData:
         self.distance_error: float = distance_error
 
         # Validate projection
+        verify_arrays_have_same_shape(
+            [self.mean_height, self.mean_height_error], msg="Expected the mean height arrays to have the same shape."
+        )
         verify_arrays_have_correct_length(
             [(self.projection_rz, 0)],
             height_bins.num_bins,

@@ -9,6 +9,13 @@ import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
 
+from novie_data.errors import (
+    verify_arrays_have_correct_length,
+    verify_arrays_have_same_shape,
+    verify_value_is_nonnegative,
+    verify_value_is_positive,
+)
+
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -105,37 +112,28 @@ class WrinkleData:
         self.neighbourhood_data: SphericalNeighbourhoodData = neighbourhood_data
         self.distance_error: float = distance_error
 
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
+        verify_value_is_nonnegative(self.min_lz, msg="Expected the minimum angular momentum to be non-negative!")
+        if self.min_lz > self.max_lz:
+            msg = "Expected the maximum angular momentum to be strictly greater than the minimum angular momentum!"
+            raise ValueError(msg)
+        verify_value_is_nonnegative(self.distance_error, msg="Expected the distance error to be non-negative!")
+
         # Verify that the arrays are the same size
-        same_shape = self.mean_radial_velocity.shape == self.mean_radial_velocity_error.shape
-        if not same_shape:
-            msg = "The projections differ in shape!"
-            msg += f"Vr = {self.mean_radial_velocity.shape}, err(Vr) = {self.mean_radial_velocity_error.shape}"
-            raise ValueError(msg)
-        # Verify that the array has the expected dimension
-        shape = self.mean_radial_velocity.shape
-        if len(shape) != 3:
-            msg = "Expected array to be a 2D array of `(num_bins, num_frames)`"
-            raise ValueError(msg)
-        # Verify that the array has expected shape
-        if shape[0] != self.num_bins:
-            msg = f"Expected the number of bins to be {self.num_bins} but got {shape[0]}"
-            raise ValueError(msg)
-        # Verify that the array has the expected number of neighbourhoods
-        if shape[2] != self.neighbourhood_data.num_spheres:
-            msg = f"Expected the number of spheres to be {self.neighbourhood_data.num_spheres} but got {shape[2]}"
-            raise ValueError(msg)
-
-        # Verify angular momentum array
-        if len(self.angular_momentum.shape) != 1:
-            msg = f"Expected array to be a 1D array of `(num_bins)` but got {self.angular_momentum.shape}"
-            raise ValueError(msg)
-        if self.angular_momentum.shape[0] != self.num_bins:
-            msg = f"Expected the number of bins to be {self.num_bins} but got {self.angular_momentum.shape[0]}"
-            raise ValueError(msg)
-
-        # Useful values
-        self.num_spheres: int = self.neighbourhood_data.num_spheres
-        self.num_frames: int = shape[1]
+        verify_arrays_have_same_shape(
+            [self.mean_radial_velocity, self.mean_radial_velocity_error],
+            msg="Expected the mean radial velocity arrays to have the same shape!",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mean_radial_velocity, 0), (self.angular_momentum, 0)],
+            num_bins,
+            msg=f"Expected the mean radial velocity arrays to have {num_bins} rows!",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mean_radial_velocity, 2)],
+            neighbourhood_data.num_spheres,
+            msg=f"Expected the mean radial velocity arrays's 3rd axis to have {neighbourhood_data.num_spheres} cells!",
+        )
 
     def __eq__(self, other: object, /) -> bool:
         """Compare for equality.

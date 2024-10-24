@@ -320,6 +320,8 @@ class CorrugationData:
         self.wedge_data: WedgeData = wedge_data
         self.distance_error: float = distance_error
 
+        verify_value_is_nonnegative(self.distance_error, msg="Expected the distance error to be non-negative!")
+
         # Validate projection
         verify_arrays_have_same_shape(
             [self.mean_height, self.mean_height_error], msg="Expected the mean height arrays to have the same shape."

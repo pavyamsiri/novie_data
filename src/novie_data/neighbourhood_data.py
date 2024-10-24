@@ -7,7 +7,7 @@ from typing import Self
 
 from h5py import File as Hdf5File
 
-from novie_data.errors import verify_value_is_positive
+from novie_data.errors import verify_value_is_nonnegative, verify_value_is_positive
 
 from .serde.accessors import get_float_attr_from_hdf5, get_int_attr_from_hdf5
 
@@ -35,7 +35,7 @@ class SphericalNeighbourhoodData:
         verify_value_is_positive(
             self.num_spheres, msg=f"Expected the number of spheres to be positive but got {self.num_spheres}."
         )
-        verify_value_is_positive(self.radius, msg=f"Expected the radius to be positive but got {self.radius} kpc.")
+        verify_value_is_nonnegative(self.radius, msg=f"Expected the radius to be non-negative but got {self.radius} kpc.")
 
     def dump_into(self, out_file: Hdf5File) -> None:
         """Deserialize data to disk.

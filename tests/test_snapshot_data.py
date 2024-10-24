@@ -37,7 +37,7 @@ def test_snapshot_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "snapshot.hdf5"
+    output_path = tmp_path / "test.hdf5"
     s = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint32), times=np.linspace(0, 1000, 5))
     s.dump(output_path)
     t = SnapshotData.load(output_path)

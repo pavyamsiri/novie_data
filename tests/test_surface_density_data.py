@@ -88,7 +88,7 @@ def test_surface_density_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "surface_density.hdf5"
+    output_path = tmp_path / "test.hdf5"
     num_bins: int = 2
     proj = np.zeros((num_bins, num_bins, 7), dtype=np.float32)
     disc_profile = ExponentialDiscProfileData(

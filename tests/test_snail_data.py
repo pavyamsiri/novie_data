@@ -48,7 +48,7 @@ def test_snail_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "snail.hdf5"
+    output_path = tmp_path / "test.hdf5"
     num_height_bins: int = 36
     num_velocity_bins: int = 20
     num_neighbourhoods: int = 7

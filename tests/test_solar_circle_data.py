@@ -35,7 +35,7 @@ def test_solar_circle_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "SolarCircle.hdf5"
+    output_path = tmp_path / "test.hdf5"
     s = SolarCircleData(name="test", omega=0.0, solar_radius=1.0)
     s.dump(output_path)
     t = SolarCircleData.load(output_path)

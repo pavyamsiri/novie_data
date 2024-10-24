@@ -66,7 +66,7 @@ def test_perturber_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "snapshot.hdf5"
+    output_path = tmp_path / "test.hdf5"
     num_frames = 20
     pos = np.zeros((3, num_frames), dtype=np.float32)
     vel = np.zeros((3, num_frames), dtype=np.float32)

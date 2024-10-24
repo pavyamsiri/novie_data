@@ -43,7 +43,7 @@ def test_arm_coverage_data_serde(tmp_path: Path) -> None:
         The temporary directory to write to.
 
     """
-    output_path = tmp_path / "snapshot.hdf5"
+    output_path = tmp_path / "test.hdf5"
     num_neighbourhoods: int = 7
     num_arms: int = 4
     num_frames: int = 20

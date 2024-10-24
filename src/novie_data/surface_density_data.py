@@ -5,12 +5,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
 from packaging.version import Version
+
+from novie_data._type_utils import Array2D, Array3D, verify_array_is_3d
+from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
 
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -20,9 +22,8 @@ from .serde.accessors import (
 )
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
+_Array2D_f32: TypeAlias = Array2D[np.float32]
+_Array3D_f32: TypeAlias = Array3D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ class ExponentialDiscProfileData:
 
     scale_mass: float
     scale_length: float
+
+    def __post_init__(self) -> None:
+        """Perform post-initialisation verification."""
+        verify_value_is_positive(self.scale_mass, msg="Expected the scale mass to be positive!")
+        verify_value_is_positive(self.scale_length, msg="Expected the scale length to be positive!")
 
     def dump_into(self, out_file: Hdf5File) -> None:
         """Deserialize exponential disc parameters to file.
@@ -85,19 +91,20 @@ class ExponentialDiscProfileData:
         )
 
 
-@dataclass
 class SurfaceDensityData:
     """The surface densities of a snapshot in all three cardinal projections.
 
     Attributes
     ----------
-    projection_xy : NDArray[float]
+    name : str
+        The name of the dataset.
+    projection_xy : Array3D[f32]
         The surface density in the xy projection.
-    projection_xz : NDArray[float]
+    projection_xz : Array3D[f32]
         The surface density in the xz projection.
-    projection_yz : NDArray[float]
+    projection_yz : Array3D[f32]
         The surface density in the yz projection.
-    flat_projection_xy : NDArray[float]
+    flat_projection_xy : Array3D[f32]
         The flattened surface density in the xy projection.
     extent : float
         The half-width of all axes.
@@ -105,8 +112,6 @@ class SurfaceDensityData:
         The number of bins of all axes.
     disc_profile : ExponentialDiscProfileData
         The parameters determining exponential profile of the disc.
-    name : str
-        The name of the dataset.
 
     Notes
     -----
@@ -114,48 +119,111 @@ class SurfaceDensityData:
 
     """
 
-    projection_xy: NDArray[float32]
-    projection_xz: NDArray[float32]
-    projection_yz: NDArray[float32]
-    flat_projection_xy: NDArray[float32]
-    extent: float
-    num_bins: int
-    disc_profile: ExponentialDiscProfileData
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
     VERSION: ClassVar[Version] = Version("3.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        projection_xy: _Array3D_f32,
+        projection_xz: _Array3D_f32,
+        projection_yz: _Array3D_f32,
+        flat_projection_xy: _Array3D_f32,
+        extent: float,
+        num_bins: int,
+        disc_profile: ExponentialDiscProfileData,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        projection_xy : Array3D[f32]
+            The surface density in the xy projection.
+        projection_xz : Array3D[f32]
+            The surface density in the xz projection.
+        projection_yz : Array3D[f32]
+            The surface density in the yz projection.
+        flat_projection_xy : Array3D[f32]
+            The flattened surface density in the xy projection.
+        extent : float
+            The half-width of all axes.
+        num_bins : int
+            The number of bins of all axes.
+        disc_profile : ExponentialDiscProfileData
+            The parameters determining exponential profile of the disc.
+
+        Notes
+        -----
+        All projections are 3D arrays of floats with the shape `(num_bins, num_bins, num_frames)`.
+
+        """
+        self.name: str = name
+        self.projection_xy: _Array3D_f32 = projection_xy
+        self.projection_xz: _Array3D_f32 = projection_xz
+        self.projection_yz: _Array3D_f32 = projection_yz
+        self.flat_projection_xy: _Array3D_f32 = flat_projection_xy
+        self.extent: float = extent
+        self.num_bins: int = num_bins
+        self.disc_profile: ExponentialDiscProfileData = disc_profile
+
+        # Verify values
+        verify_value_is_positive(self.extent, msg="Expected the extent to be positive!")
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
+
         # Verify that the projections are the same size
-        same_shape = (
-            self.projection_xy.shape == self.projection_xz.shape
-            and self.projection_xy.shape == self.projection_yz.shape
-            and self.flat_projection_xy.shape == self.projection_xy.shape
+        verify_arrays_have_same_shape(
+            [self.projection_xy, self.projection_xz, self.projection_yz, self.flat_projection_xy],
+            msg="Projections differ in shape!",
         )
-        if not same_shape:
-            msg = "The projections differ in shape!"
-            msg += f"xy = {self.projection_xy.shape}, xz = {self.projection_xz.shape}, yz = {self.projection_yz.shape}"
-            raise ValueError(msg)
-        # Verify that the projection has the expected dimension
-        shape = self.projection_xz.shape
-        if len(shape) != 3:
-            msg = "Expected projections to be a 3D array of `(num_bins, num_bins, num_frames)`"
-            raise ValueError(msg)
-        # Verify that the projection has expected shape
-        if shape[0] != self.num_bins or shape[1] != self.num_bins:
-            msg = f"Expected each slice to be ({self.num_bins}, {self.num_bins}) but got ({shape[0]}, {shape[1]})"
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.projection_xy, 0)], num_bins, msg=f"Expected the projection to have {num_bins} rows!"
+        )
+        verify_arrays_have_correct_length(
+            [(self.projection_xy, 1)], num_bins, msg=f"Expected the projection to have {num_bins} columns!"
+        )
 
         # Useful properties
         self.pixel_to_distance: float = 2 * self.extent / self.num_bins
-        self.overdensity: NDArray[float32] = np.divide(
+        self.overdensity: _Array3D_f32 = np.divide(
             self.flat_projection_xy,
             self.flat_projection_xy[:, :, 0][:, :, None],
             where=self.flat_projection_xy[:, :, 0][:, :, None] != 0,
         )
-        self.density_contrast: NDArray[float32] = self.overdensity - 1
+        self.density_contrast: _Array3D_f32 = self.overdensity - 1
+
+    def __eq__(self, other: object) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.extent == other.extent
+        equality &= self.num_bins == other.num_bins
+        equality &= self.disc_profile == other.disc_profile
+        equality &= np.all(self.projection_xy == other.projection_xy)
+        equality &= np.all(self.projection_xz == other.projection_xz)
+        equality &= np.all(self.projection_yz == other.projection_yz)
+        equality &= np.all(self.flat_projection_xy == other.flat_projection_xy)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -181,11 +249,12 @@ class SurfaceDensityData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
-            projection_xy = read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=float32)
-            projection_xz = read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=float32)
-            projection_yz = read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=float32)
-
-            flat_projection_xy = read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=float32)
+            projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float32))
+            projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float32))
+            projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float32))
+            flat_projection_xy = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=np.float32)
+            )
 
             disc_profile = ExponentialDiscProfileData.load_from(file)
 
@@ -299,13 +368,13 @@ class SurfaceDensityData:
         """
         return float(np.nanmax(self.flat_projection_xy))
 
-    def get_dummy_data(self) -> NDArray[float32]:
+    def get_dummy_data(self) -> _Array2D_f32:
         """Return an array of ones with the same shape as the grid.
 
         Returns
         -------
-        NDArray[float32]
+        _Array2D_f32
             The array of ones with the same shape as the grid.
 
         """
-        return np.ones((self.num_bins, self.num_bins), dtype=float32)
+        return np.ones((self.num_bins, self.num_bins), dtype=np.float32)

@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
 
+import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
 from packaging.version import Version
+
+from novie_data._type_utils import Array1D, Array3D, verify_array_is_1d, verify_array_is_3d
+from novie_data.errors import (
+    verify_arrays_have_correct_length,
+    verify_arrays_have_same_shape,
+    verify_value_is_nonnegative,
+    verify_value_is_positive,
+)
 
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import (
@@ -22,23 +29,26 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy.typing import NDArray
+
+_Array1D_f32: TypeAlias = Array1D[np.float32]
+_Array3D_f32: TypeAlias = Array3D[np.float32]
 
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class WrinkleData:
     """The surface densities of a snapshot in all three cardinal projections.
 
     Attributes
     ----------
-    angular_momentum : NDArray[float]
+    name : str
+        The name of the dataset.
+    angular_momentum : Array1D[f32]
         The central angular momementum values of each bin in kpc km/s.
-    mean_radial_velocity : NDArray[float]
+    mean_radial_velocity : Array3D[f32]
         The mean radial velocity of each bin in km/s.
-    mean_radial_velocity_error : NDArray[float]
+    mean_radial_velocity_error : Array3D[f32]
         The Poisson error of the mean radial velocity of each bin in km/s.
         This is given by error = std / sqrt(N).
     min_lz : float
@@ -51,59 +61,114 @@ class WrinkleData:
         The neighbourhood configuration.
     distance_error : float
         The error on the LOS distance (1 sigma) as a percentage of the distance.
-    name : str
-        The name of the dataset.
 
     """
-
-    angular_momentum: NDArray[float32]
-    mean_radial_velocity: NDArray[float32]
-    mean_radial_velocity_error: NDArray[float32]
-    min_lz: float
-    max_lz: float
-    num_bins: int
-    neighbourhood_data: SphericalNeighbourhoodData
-
-    # Distance error (1 std) as a percentage
-    distance_error: float
-    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
     VERSION: ClassVar[Version] = Version("3.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        angular_momentum: _Array1D_f32,
+        mean_radial_velocity: _Array3D_f32,
+        mean_radial_velocity_error: _Array3D_f32,
+        min_lz: float,
+        max_lz: float,
+        num_bins: int,
+        neighbourhood_data: SphericalNeighbourhoodData,
+        distance_error: float,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        angular_momentum : Array1D[f32]
+            The central angular momementum values of each bin in kpc km/s.
+        mean_radial_velocity : Array3D[f32]
+            The mean radial velocity of each bin in km/s.
+        mean_radial_velocity_error : Array3D[f32]
+            The Poisson error of the mean radial velocity of each bin in km/s.
+            This is given by error = std / sqrt(N).
+        min_lz : float
+            The minimum angular momentum in kpc km/s.
+        max_lz : float
+            The maximum angular momentum in kpc km/s.
+        num_bins : int
+            The number of bins in angular momentum Lz.
+        neighbourhood_data : SphericalNeighbourhoodData
+            The neighbourhood configuration.
+        distance_error : float
+            The error on the LOS distance (1 sigma) as a percentage of the distance.
+
+        """
+        self.name: str = name
+        self.angular_momentum: _Array1D_f32 = angular_momentum
+        self.mean_radial_velocity: _Array3D_f32 = mean_radial_velocity
+        self.mean_radial_velocity_error: _Array3D_f32 = mean_radial_velocity_error
+        self.min_lz: float = min_lz
+        self.max_lz: float = max_lz
+        self.num_bins: int = num_bins
+        self.neighbourhood_data: SphericalNeighbourhoodData = neighbourhood_data
+        self.distance_error: float = distance_error
+
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
+        verify_value_is_nonnegative(self.min_lz, msg="Expected the minimum angular momentum to be non-negative!")
+        if self.min_lz > self.max_lz:
+            msg = "Expected the maximum angular momentum to be strictly greater than the minimum angular momentum!"
+            raise ValueError(msg)
+        verify_value_is_nonnegative(self.distance_error, msg="Expected the distance error to be non-negative!")
+
         # Verify that the arrays are the same size
-        same_shape = self.mean_radial_velocity.shape == self.mean_radial_velocity_error.shape
-        if not same_shape:
-            msg = "The projections differ in shape!"
-            msg += f"Vr = {self.mean_radial_velocity.shape}, err(Vr) = {self.mean_radial_velocity_error.shape}"
-            raise ValueError(msg)
-        # Verify that the array has the expected dimension
-        shape = self.mean_radial_velocity.shape
-        if len(shape) != 3:
-            msg = "Expected array to be a 2D array of `(num_bins, num_frames)`"
-            raise ValueError(msg)
-        # Verify that the array has expected shape
-        if shape[0] != self.num_bins:
-            msg = f"Expected the number of bins to be {self.num_bins} but got {shape[0]}"
-            raise ValueError(msg)
-        # Verify that the array has the expected number of neighbourhoods
-        if shape[2] != self.neighbourhood_data.num_spheres:
-            msg = f"Expected the number of spheres to be {self.neighbourhood_data.num_spheres} but got {shape[2]}"
-            raise ValueError(msg)
+        verify_arrays_have_same_shape(
+            [self.mean_radial_velocity, self.mean_radial_velocity_error],
+            msg="Expected the mean radial velocity arrays to have the same shape!",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mean_radial_velocity, 0), (self.angular_momentum, 0)],
+            num_bins,
+            msg=f"Expected the mean radial velocity arrays to have {num_bins} rows!",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mean_radial_velocity, 2)],
+            neighbourhood_data.num_spheres,
+            msg=f"Expected the mean radial velocity arrays's 3rd axis to have {neighbourhood_data.num_spheres} cells!",
+        )
 
-        # Verify angular momentum array
-        if len(self.angular_momentum.shape) != 1:
-            msg = f"Expected array to be a 1D array of `(num_bins)` but got {self.angular_momentum.shape}"
-            raise ValueError(msg)
-        if self.angular_momentum.shape[0] != self.num_bins:
-            msg = f"Expected the number of bins to be {self.num_bins} but got {self.angular_momentum.shape[0]}"
-            raise ValueError(msg)
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
 
-        # Useful values
-        self.num_spheres: int = self.neighbourhood_data.num_spheres
-        self.num_frames: int = shape[1]
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.min_lz == other.min_lz
+        equality &= self.max_lz == other.max_lz
+        equality &= self.num_bins == other.num_bins
+        equality &= self.neighbourhood_data == other.neighbourhood_data
+        equality &= self.distance_error == other.distance_error
+        equality &= np.all(self.angular_momentum == other.angular_momentum)
+        equality &= np.all(self.mean_radial_velocity == other.mean_radial_velocity)
+        equality &= np.all(self.mean_radial_velocity_error == other.mean_radial_velocity_error)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -131,9 +196,13 @@ class WrinkleData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
-            angular_momentum = read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=float32)
-            mean_radial_velocity = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=float32)
-            mean_radial_velocity_error = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=float32)
+            angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float32))
+            mean_radial_velocity = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float32)
+            )
+            mean_radial_velocity_error = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float32)
+            )
 
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
 

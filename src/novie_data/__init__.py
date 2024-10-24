@@ -1,11 +1,8 @@
 """Module contains every novie data class definition."""
 
 from .arm_coverage_data import SpiralArmCoverageData
-from .arm_data import SpiralClusterResidualsData
-from .cluster_data import SpiralClusterData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
-from .file_types import NovieFileType, get_novie_file_type
 from .interface import NovieData
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .perturber_data import PerturberData
@@ -22,12 +19,8 @@ __all__ = [
     "CorrugationData",
     "SnailData",
     "CorrugationResidualsData",
-    "SpiralClusterData",
     "SnapshotData",
     "SolarCircleData",
-    "get_novie_file_type",
-    "NovieFileType",
-    "SpiralClusterResidualsData",
     "SpiralArmCoverageData",
     "WrinkleData",
     "WrinkleResidualsData",
@@ -37,4 +30,4 @@ __all__ = [
     "NovieData",
 ]
 
-__version__: str = "1.1.0"
+__version__: str = "2.0.0"

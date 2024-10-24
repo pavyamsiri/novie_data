@@ -5,14 +5,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, ClassVar, Self, assert_never
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias, assert_never
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
-from numpy.typing import NDArray
 from packaging.version import Version
 from scipy.ndimage import gaussian_filter
+
+from novie_data._type_utils import Array2D, Array4D, verify_array_is_4d
+from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
 
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import (
@@ -26,8 +27,9 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy.typing import NDArray
 
+_Array2D_f32: TypeAlias = Array2D[np.float32]
+_Array4D_f32: TypeAlias = Array4D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -119,33 +121,114 @@ class SnailPlotColoring(Enum):
 class SnailData:
     """The snail data of a snapshot."""
 
-    # Data products
-    surface_density: NDArray[float32]
-    azimuthal_velocity: NDArray[float32]
-    radial_velocity: NDArray[float32]
-    neighbourhood_data: SphericalNeighbourhoodData
-
-    # Metadata
-    num_height_bins: int
-    num_velocity_bins: int
-    max_height: float
-    max_velocity: float
-
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
     VERSION: ClassVar[Version] = Version("4.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        surface_density: _Array4D_f32,
+        azimuthal_velocity: _Array4D_f32,
+        radial_velocity: _Array4D_f32,
+        neighbourhood_data: SphericalNeighbourhoodData,
+        num_height_bins: int,
+        num_velocity_bins: int,
+        max_height: float,
+        max_velocity: float,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        surface_density : Array4D[f32]
+            The surface density for each neighbourhood and frame.
+        azimuthal_velocity : Array4D[f32]
+            The azimuthal velocity for each neighbourhood and frame.
+        radial_velocity : Array4D[f32]
+            The radial velocity for each neighbourhood and frame.
+        neighbourhood_data : SphericalNeighbourhoodData
+            The neighbourhood data.
+        num_height_bins : int
+            The number of height bins.
+        num_velocity_bins : int
+            The number of velocity bins.
+        max_height : float
+            The maximum absolute height in units of kpc.
+        max_velocity : float
+            The maximum absolute velocity in units of km/s.
+
+        """
+        self.name: str = name
+        self.surface_density: _Array4D_f32 = surface_density
+        self.azimuthal_velocity: _Array4D_f32 = azimuthal_velocity
+        self.radial_velocity: _Array4D_f32 = radial_velocity
+        self.neighbourhood_data: SphericalNeighbourhoodData = neighbourhood_data
+        self.num_height_bins: int = num_height_bins
+        self.num_velocity_bins: int = num_velocity_bins
+        self.max_height: float = max_height
+        self.max_velocity: float = max_velocity
+
+        # Verify values
+        verify_value_is_positive(self.num_height_bins, msg="Expected the number of height bins to be positive!")
+        verify_value_is_positive(self.num_velocity_bins, msg="Expected the number of velocity bins to be positive!")
+        verify_value_is_positive(self.max_height, msg="Expected the maximum absolute height to be positive!")
+        verify_value_is_positive(self.max_velocity, msg="Expected the of velocity bins to be positive!")
+
         # Validate shapes
-        same_shape = (
-            self.surface_density.shape == self.azimuthal_velocity.shape
-            and self.surface_density.shape == self.radial_velocity.shape
+        verify_arrays_have_same_shape(
+            [self.surface_density, self.azimuthal_velocity, self.radial_velocity],
+            msg="Expected projections to have the same shape!",
         )
-        if not same_shape:
-            msg = "The colorings differ in shape!"
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 0)],
+            num_velocity_bins,
+            msg=f"Expected the projections to have {num_velocity_bins} rows (number of velocity bins).",
+        )
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 1)],
+            num_height_bins,
+            msg=f"Expected the projections to have {num_height_bins} columns (number of velocity bins).",
+        )
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 3)],
+            neighbourhood_data.num_spheres,
+            msg=f"Expected the projections to have {neighbourhood_data.num_spheres} axis 3 (number of neighbourhoods).",
+        )
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.neighbourhood_data == other.neighbourhood_data
+        equality &= np.all(self.surface_density == other.surface_density)
+        equality &= np.all(self.azimuthal_velocity == other.azimuthal_velocity)
+        equality &= np.all(self.radial_velocity == other.radial_velocity)
+        equality &= self.num_height_bins == other.num_height_bins
+        equality &= self.num_velocity_bins == other.num_velocity_bins
+        equality &= self.max_height == other.max_height
+        equality &= self.max_velocity == other.max_velocity
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -173,9 +256,11 @@ class SnailData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Arrays
-            surface_density = read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=float32)
-            azimuthal_velocity = read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=float32)
-            radial_velocity = read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=float32)
+            surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float32))
+            azimuthal_velocity = verify_array_is_4d(
+                read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float32)
+            )
+            radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float32))
 
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
@@ -312,11 +397,11 @@ class SnailData:
         return float(np.nanmax(array[array != 0]))
 
     @property
-    def overdensity(self) -> NDArray[float32]:
-        """NDArray[float32]: The overdensity map blurred using a width of 4 bins."""
+    def overdensity(self) -> _Array4D_f32:
+        """_Array4D_f32: The overdensity map blurred using a width of 4 bins."""
         return self.get_overdensity(4)
 
-    def get_overdensity(self, blur_width: float) -> NDArray[float32]:
+    def get_overdensity(self, blur_width: float) -> _Array4D_f32:
         """Return the overdensity map given a blurring width in units of bins.
 
         Parameters
@@ -326,25 +411,25 @@ class SnailData:
 
         Returns
         -------
-        overdensity : NDArray[float32]
+        overdensity : _Array4D_f32
             The overdensity.
 
         """
-        mean_density: NDArray[float32] = gaussian_filter(
-            self.surface_density, sigma=(blur_width, blur_width), axes=(0, 1)
-        ).astype(float32)
+        mean_density: _Array4D_f32 = gaussian_filter(self.surface_density, sigma=(blur_width, blur_width), axes=(0, 1)).astype(
+            np.float32
+        )
         norm_density = np.copy(self.surface_density)
         norm_density[norm_density != 0] /= mean_density[norm_density != 0]
-        return (norm_density - 1).astype(float32)
+        return (norm_density - 1).astype(np.float32)
 
-    def get_dummy_data(self) -> NDArray[float32]:
+    def get_dummy_data(self) -> _Array2D_f32:
         """Return an array of ones with the same shape as the grid.
 
         Returns
         -------
-        NDArray[float32]
+        _Array2D_f32
             The array of ones with the same shape as the grid.
 
         """
         # NOTE: Transpose to return as row-major with the velocity being on the vertical axis.
-        return np.zeros((self.num_height_bins, self.num_velocity_bins), dtype=float32).T
+        return np.zeros((self.num_height_bins, self.num_velocity_bins), dtype=np.float32).T

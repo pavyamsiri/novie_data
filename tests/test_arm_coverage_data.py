@@ -1,5 +1,4 @@
 """Test arm coverage data."""
-# TODO(pavyamsiri): Write tests for invalid inputs
 
 from pathlib import Path
 

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
-from numpy.typing import NDArray
 from packaging.version import Version
 
+from novie_data._type_utils import Array3D, verify_array_is_3d
 from novie_data.errors import (
     verify_arrays_have_correct_length,
     verify_arrays_have_same_shape,
@@ -29,8 +28,8 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy.typing import NDArray
 
+_Array3D_f32: TypeAlias = Array3D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -45,8 +44,8 @@ class RidgeData:
         self,
         *,
         name: str,
-        mass_density: NDArray[float32],
-        number_density: NDArray[float32],
+        mass_density: _Array3D_f32,
+        number_density: _Array3D_f32,
         num_radial_bins: int,
         num_velocity_bins: int,
         min_radius: float,
@@ -79,8 +78,8 @@ class RidgeData:
 
         """
         self.name: str = name
-        self.mass_density: NDArray[float32] = mass_density
-        self.number_density: NDArray[float32] = number_density
+        self.mass_density: _Array3D_f32 = mass_density
+        self.number_density: _Array3D_f32 = number_density
         self.num_radial_bins: int = num_radial_bins
         self.num_velocity_bins: int = num_velocity_bins
         self.min_radius: float = min_radius
@@ -173,8 +172,8 @@ class RidgeData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Arrays
-            mass_density = read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=float32)
-            number_density = read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=float32)
+            mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float32))
+            number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float32))
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -255,14 +254,14 @@ class RidgeData:
         """
         return (self.min_radius, self.max_radius, self.min_velocity, self.max_velocity)
 
-    def get_dummy_data(self) -> NDArray[float32]:
+    def get_dummy_data(self) -> _Array3D_f32:
         """Return an array of ones with the same shape as the grid.
 
         Returns
         -------
-        NDArray[float32]
+        _Array3D_f32
             The array of ones with the same shape as the grid.
 
         """
         # NOTE: Transpose to return as row-major with the velocity being on the vertical axis.
-        return np.zeros((self.num_velocity_bins, self.num_radial_bins), dtype=float32)
+        return np.zeros((self.num_velocity_bins, self.num_radial_bins), dtype=np.float32)

@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
 from packaging.version import Version
 
+from novie_data._type_utils import Array1D, Array2D, Array3D, Array4D, verify_array_is_1d, verify_array_is_3d, verify_array_is_4d
 from novie_data.errors import verify_arrays_have_correct_length, verify_value_is_nonnegative, verify_value_is_positive
 
 from .serde.accessors import (
@@ -22,9 +22,10 @@ from .serde.accessors import (
 )
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
+_Array1D_f32: TypeAlias = Array1D[np.float32]
+_Array2D_f32: TypeAlias = Array2D[np.float32]
+_Array3D_f32: TypeAlias = Array3D[np.float32]
+_Array4D_f32: TypeAlias = Array4D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -271,10 +272,10 @@ class CorrugationData:
         self,
         *,
         name: str,
-        projection_rz: NDArray[float32],
-        radii: NDArray[float32],
-        mean_height: NDArray[float32],
-        mean_height_error: NDArray[float32],
+        projection_rz: _Array4D_f32,
+        radii: _Array1D_f32,
+        mean_height: _Array3D_f32,
+        mean_height_error: _Array3D_f32,
         radial_bins: RadialBinningData,
         height_bins: HeightBinningData,
         wedge_data: WedgeData,
@@ -305,10 +306,10 @@ class CorrugationData:
 
         """
         self.name: str = name
-        self.projection_rz: NDArray[float32] = projection_rz
-        self.radii: NDArray[float32] = radii
-        self.mean_height: NDArray[float32] = mean_height
-        self.mean_height_error: NDArray[float32] = mean_height_error
+        self.projection_rz: _Array4D_f32 = projection_rz
+        self.radii: _Array1D_f32 = radii
+        self.mean_height: _Array3D_f32 = mean_height
+        self.mean_height_error: _Array3D_f32 = mean_height_error
         self.radial_bins: RadialBinningData = radial_bins
         self.height_bins: HeightBinningData = height_bins
         self.wedge_data: WedgeData = wedge_data
@@ -396,11 +397,11 @@ class CorrugationData:
             distance_error: float = get_float_attr_from_hdf5(file, "distance_error")
 
             # Projections
-            projection_rz = read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=float32)
+            projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32))
             # Mean height
-            radii = read_dataset_from_hdf5_with_dtype(file, "radii", dtype=float32)
-            mean_height = read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=float32)
-            mean_height_error = read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=float32)
+            radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32))
+            mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float32))
+            mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32))
             radial_bins = RadialBinningData.load_from(file)
             height_bins = HeightBinningData.load_from(file)
             wedge_data = WedgeData.load_from(file)
@@ -512,14 +513,14 @@ class CorrugationData:
         """
         return float(np.nanmax(self.projection_rz[self.projection_rz > 0]))
 
-    def get_dummy_data(self) -> NDArray[float32]:
+    def get_dummy_data(self) -> _Array2D_f32:
         """Return an array of ones with the same shape as the grid.
 
         Returns
         -------
-        NDArray[float32]
+        Array2D[f32]
             The array of ones with the same shape as the grid.
 
         """
         # NOTE: Transpose to return as row-major, with the height being on the vertical axis.
-        return np.ones((self.radial_bins.num_bins, self.height_bins.num_bins), dtype=float32).T
+        return np.ones((self.height_bins.num_bins, self.radial_bins.num_bins), dtype=np.float32)

@@ -1,4 +1,4 @@
-"""Test snail data."""
+"""Test corrugation data."""
 
 from pathlib import Path
 

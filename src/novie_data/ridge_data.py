@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
@@ -11,6 +10,13 @@ from h5py import File as Hdf5File
 from numpy import float32
 from numpy.typing import NDArray
 from packaging.version import Version
+
+from novie_data.errors import (
+    verify_arrays_have_correct_length,
+    verify_arrays_have_same_shape,
+    verify_value_is_nonnegative,
+    verify_value_is_positive,
+)
 
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -29,34 +35,115 @@ if TYPE_CHECKING:
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class RidgeData:
     """The surface densities of a snapshot."""
-
-    # Data products
-    mass_density: NDArray[float32]
-    number_density: NDArray[float32]
-
-    # Metadata
-    num_radial_bins: int
-    num_velocity_bins: int
-    min_radius: float
-    max_radius: float
-    min_velocity: float
-    max_velocity: float
-
-    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
     VERSION: ClassVar[Version] = Version("2.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        # Validate shapes
-        same_shape = self.mass_density.shape == self.number_density.shape and self.mass_density.shape == self.number_density.shape
-        if not same_shape:
-            msg = "The colorings differ in shape!"
+    def __init__(
+        self,
+        *,
+        name: str,
+        mass_density: NDArray[float32],
+        number_density: NDArray[float32],
+        num_radial_bins: int,
+        num_velocity_bins: int,
+        min_radius: float,
+        max_radius: float,
+        min_velocity: float,
+        max_velocity: float,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        mass_density : Array3D[f32]
+            The mass density projection in r-Vr phase space.
+        number_density : Array3D[f32]
+            The number density projection in r-Vr phase space.
+        num_radial_bins : int
+            The number of radial bins.
+        num_velocity_bins : int
+            The number of velocity bins.
+        min_radius : float
+            The minimum radius in units of kpc.
+        max_radius : float
+            The maximum radius in units of kpc.
+        min_velocity : float
+            The minimum velocity in units of km/s.
+        max_velocity : float
+            The maximum velocity in units of km/s.
+
+        """
+        self.name: str = name
+        self.mass_density: NDArray[float32] = mass_density
+        self.number_density: NDArray[float32] = number_density
+        self.num_radial_bins: int = num_radial_bins
+        self.num_velocity_bins: int = num_velocity_bins
+        self.min_radius: float = min_radius
+        self.max_radius: float = max_radius
+        self.min_velocity: float = min_velocity
+        self.max_velocity: float = max_velocity
+
+        verify_value_is_positive(self.num_radial_bins, msg="Expected the number of radial bins to be positive!")
+        verify_value_is_positive(self.num_velocity_bins, msg="Expected the number of velocity bins to be positive!")
+        verify_value_is_nonnegative(self.min_radius, msg="Expected the minimum radius to be non-negative!")
+        if self.min_radius >= self.max_radius:
+            msg = "Expected the maximum radius to be strictly greater than the minimum radius!"
             raise ValueError(msg)
+        if self.min_velocity >= self.max_velocity:
+            msg = "Expected the maximum velocity to be strictly greater than the minimum velocity!"
+            raise ValueError(msg)
+
+        verify_arrays_have_same_shape(
+            [self.mass_density, self.number_density],
+            msg="Expected the mass density and number density array to have the same shape!",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mass_density, 0)],
+            self.num_velocity_bins,
+            msg=f"Expected the mass/number density array to have {self.num_velocity_bins} rows.",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mass_density, 1)],
+            self.num_radial_bins,
+            msg=f"Expected the mass/number density array to have {self.num_radial_bins} columns.",
+        )
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.num_radial_bins == other.num_radial_bins
+        equality &= self.num_velocity_bins == other.num_velocity_bins
+        equality &= self.min_radius == other.min_radius
+        equality &= self.max_radius == other.max_radius
+        equality &= self.min_velocity == other.min_velocity
+        equality &= self.max_velocity == other.max_velocity
+        equality &= np.all(self.mass_density == other.mass_density)
+        equality &= np.all(self.number_density == other.number_density)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

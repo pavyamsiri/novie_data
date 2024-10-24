@@ -14,6 +14,8 @@ from numpy.typing import NDArray
 from packaging.version import Version
 from scipy.ndimage import gaussian_filter
 
+from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
+
 from .neighbourhood_data import SphericalNeighbourhoodData
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -169,14 +171,32 @@ class SnailData:
         self.max_height: float = max_height
         self.max_velocity: float = max_velocity
 
+        # Verify values
+        verify_value_is_positive(self.num_height_bins, msg="Expected the number of height bins to be positive!")
+        verify_value_is_positive(self.num_velocity_bins, msg="Expected the number of velocity bins to be positive!")
+        verify_value_is_positive(self.max_height, msg="Expected the maximum absolute height to be positive!")
+        verify_value_is_positive(self.max_velocity, msg="Expected the of velocity bins to be positive!")
+
         # Validate shapes
-        same_shape = (
-            self.surface_density.shape == self.azimuthal_velocity.shape
-            and self.surface_density.shape == self.radial_velocity.shape
+        verify_arrays_have_same_shape(
+            [self.surface_density, self.azimuthal_velocity, self.radial_velocity],
+            msg="Expected projections to have the same shape!",
         )
-        if not same_shape:
-            msg = "The colorings differ in shape!"
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 0)],
+            num_velocity_bins,
+            msg=f"Expected the projections to have {num_velocity_bins} rows (number of velocity bins).",
+        )
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 1)],
+            num_height_bins,
+            msg=f"Expected the projections to have {num_height_bins} columns (number of velocity bins).",
+        )
+        verify_arrays_have_correct_length(
+            [(self.surface_density, 3)],
+            neighbourhood_data.num_spheres,
+            msg=f"Expected the projections to have {neighbourhood_data.num_spheres} axis 3 (number of neighbourhoods).",
+        )
 
     def __eq__(self, other: object, /) -> bool:
         """Compare for equality.

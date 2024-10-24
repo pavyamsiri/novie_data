@@ -275,28 +275,59 @@ class WedgeData:
         )
 
 
-@dataclass
 class CorrugationData:
     """The side on view of a snapshot."""
-
-    projection_rz: NDArray[float32]
-    radii: NDArray[float32]
-    mean_height: NDArray[float32]
-    mean_height_error: NDArray[float32]
-
-    radial_bins: RadialBinningData
-    height_bins: HeightBinningData
-    wedge_data: WedgeData
-
-    # Standard deviation of distances as a percentage
-    distance_error: float
-    name: str
 
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
     VERSION: ClassVar[Version] = Version("3.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        projection_rz: NDArray[float32],
+        radii: NDArray[float32],
+        mean_height: NDArray[float32],
+        mean_height_error: NDArray[float32],
+        radial_bins: RadialBinningData,
+        height_bins: HeightBinningData,
+        wedge_data: WedgeData,
+        distance_error: float,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        projection_rz : Array4D[f32]
+            The GC radius and GC height phase space projection for each neighbourhood and frame.
+        radii : Array1D[f32]
+            The central radius value for each radial bin in units of kpc.
+        mean_height : Array3D[f32]
+            The mean height for each radial bin in units of kpc.
+        mean_height_error : Array3D[f32]
+            The error in the mean height for each radial bin in units of kpc.
+        radial_bins : RadialBinningData
+            The radial binning data.
+        height_bins : HeightBinningData
+            The height binning data.
+        wedge_data : WedgeData
+            The wedge data.
+        distance_error : float
+            The error in LOS distance as a percentage.
+
+        """
+        self.name: str = name
+        self.projection_rz: NDArray[float32] = projection_rz
+        self.radii: NDArray[float32] = radii
+        self.mean_height: NDArray[float32] = mean_height
+        self.mean_height_error: NDArray[float32] = mean_height_error
+        self.radial_bins: RadialBinningData = radial_bins
+        self.height_bins: HeightBinningData = height_bins
+        self.wedge_data: WedgeData = wedge_data
+        self.distance_error: float = distance_error
+
         # Validate projection
         projection_shape = self.projection_rz.shape
         if len(projection_shape) != 4:
@@ -320,6 +351,38 @@ class CorrugationData:
         if len(mean_height_shape) != 3:
             msg = f"Expected the mean height and its error array to be 3D but it is instead {len(mean_height_shape)}D."
             raise ValueError(msg)
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.radial_bins == other.radial_bins
+        equality &= self.height_bins == other.height_bins
+        equality &= self.wedge_data == other.wedge_data
+        equality &= self.distance_error == other.distance_error
+        equality &= np.all(self.projection_rz == other.projection_rz)
+        equality &= np.all(self.radii == other.radii)
+        equality &= np.all(self.mean_height == other.mean_height)
+        equality &= np.all(self.mean_height_error == other.mean_height_error)
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

@@ -12,6 +12,8 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
+from novie_data.errors import verify_arrays_have_correct_length, verify_value_is_nonnegative, verify_value_is_positive
+
 from .serde.accessors import (
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
@@ -48,12 +50,8 @@ class RadialBinningData:
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
-        if self.num_bins < 1:
-            msg = f"Expected the number of bins to be positive but got {self.num_bins}."
-            raise ValueError(msg)
-        if self.min_radius < 0 or self.max_radius <= 0:
-            msg = f"Expected the limits to be non-negative but got [{self.min_radius}, {self.max_radius}] kpc."
-            raise ValueError(msg)
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
+        verify_value_is_nonnegative(self.min_radius, msg="Expected the minimum radius to be non-negative!")
         if self.min_radius >= self.max_radius:
             msg = f"Expected the minimum radius {self.min_radius} kpc to be less than {self.max_radius} kpc."
             raise ValueError(msg)
@@ -122,15 +120,9 @@ class HeightBinningData:
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
-        if self.num_bins < 1:
-            msg = f"Expected the number of bins to be positive but got {self.num_bins}."
-            raise ValueError(msg)
-        if self.max_height <= 0:
-            msg = f"Expected the limits to be non-negative but got max height {self.max_height} kpc."
-            raise ValueError(msg)
-        if self.cutoff_frequency < 0:
-            msg = f"Expected the cutoff frequency to be non-negative but got max_height {self.cutoff_frequency} kpc^-1."
-            raise ValueError(msg)
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
+        verify_value_is_positive(self.max_height, msg="Expected the maximum absolute height to be positive!")
+        verify_value_is_nonnegative(self.cutoff_frequency, msg="Expected the cutoff frequency to be non-negative!")
 
     def dump_into(self, out_file: Hdf5File) -> None:
         """Deserialize data to file.
@@ -206,12 +198,9 @@ class WedgeData:
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
-        if self.num_wedges < 1:
-            msg = f"Expected the number of wedges to be positive but got {self.num_wedges}."
-            raise ValueError(msg)
-        if self.inner_radius < 0 or self.outer_radius <= 0:
-            msg = f"Expected the limits to be non-negative but got [{self.inner_radius}, {self.outer_radius}] kpc."
-            raise ValueError(msg)
+        verify_value_is_positive(self.num_wedges, msg="Expected the number of wedges to be positive!")
+        verify_value_is_nonnegative(self.inner_radius, msg="Expected the inner radius to be non-negative!")
+        verify_value_is_nonnegative(self.min_longitude_deg, msg="Expected the minimum longitude in degrees to be non-negative!")
         if self.inner_radius >= self.outer_radius:
             msg = (
                 f"Expected the inner radius {self.inner_radius} kpc to be smaller than the outer radius {self.outer_radius} kpc."
@@ -219,9 +208,6 @@ class WedgeData:
             raise ValueError(msg)
         if self.min_longitude_deg >= self.max_longitude_deg:
             msg = f"Expected longitudes to be monontonic increasing but {self.min_longitude_deg} < {self.max_longitude_deg}"
-            raise ValueError(msg)
-        if self.min_longitude_deg < 0 or self.max_longitude_deg <= 0:
-            msg = f"Expected longitudes to be non-negative but got [{self.min_longitude_deg}, {self.max_longitude_deg}]"
             raise ValueError(msg)
         self.width: float = self.outer_radius - self.inner_radius
         self.longitude_width_deg: float = self.max_longitude_deg - self.min_longitude_deg
@@ -329,28 +315,31 @@ class CorrugationData:
         self.distance_error: float = distance_error
 
         # Validate projection
-        projection_shape = self.projection_rz.shape
-        if len(projection_shape) != 4:
-            msg = f"Expected the projection to be 4D but it is instead {len(projection_shape)}D."
-            raise ValueError(msg)
-
-        if len(self.radii.shape) != 1:
-            msg = f"Expected the radial bin centres to be 1D but it is instead {len(self.radii.shape)}D."
-            raise ValueError(msg)
-        if self.radii.shape[0] != self.radial_bins.num_bins:
-            msg = f"Expected the number of radial bin centres to be {self.radial_bins.num_bins} but got {self.radii.shape[0]}."
-            raise ValueError(msg)
-
-        if self.mean_height.shape != self.mean_height_error.shape:
-            mean_height_shape = self.mean_height.shape
-            error_shape = self.mean_height_error.shape
-            msg = f"Expected the shape of mean height {mean_height_shape} to be same as its errors {error_shape}"
-            raise ValueError(msg)
-
-        mean_height_shape = self.mean_height.shape
-        if len(mean_height_shape) != 3:
-            msg = f"Expected the mean height and its error array to be 3D but it is instead {len(mean_height_shape)}D."
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.projection_rz, 0)],
+            height_bins.num_bins,
+            msg=f"Expected the projection's 1st axis to have {height_bins.num_bins} cells.",
+        )
+        verify_arrays_have_correct_length(
+            [(self.projection_rz, 1)],
+            radial_bins.num_bins,
+            msg=f"Expected the projection's 2nd axis to have {radial_bins.num_bins} cells.",
+        )
+        verify_arrays_have_correct_length(
+            [(self.radii, 0), (self.mean_height, 0), (self.mean_height_error, 0)],
+            radial_bins.num_bins,
+            msg=f"Expected the mean height arrays and the radii array to have {radial_bins.num_bins} rows.",
+        )
+        verify_arrays_have_correct_length(
+            [(self.projection_rz, 3)],
+            wedge_data.num_wedges,
+            msg=f"Expected the projection's 4th axis to have {wedge_data.num_wedges} cells.",
+        )
+        verify_arrays_have_correct_length(
+            [(self.mean_height, 2), (self.mean_height_error, 2)],
+            wedge_data.num_wedges,
+            msg=f"Expected the mean height array's 3rd axis to have {wedge_data.num_wedges} cells.",
+        )
 
     def __eq__(self, other: object, /) -> bool:
         """Compare for equality.

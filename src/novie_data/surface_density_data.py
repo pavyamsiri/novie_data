@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
-from numpy import float32
 from packaging.version import Version
 
+from novie_data._type_utils import Array2D, Array3D, verify_array_is_3d
 from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape
 
 from .serde.accessors import (
@@ -22,9 +22,8 @@ from .serde.accessors import (
 )
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
+_Array2D_f32: TypeAlias = Array2D[np.float32]
+_Array3D_f32: TypeAlias = Array3D[np.float32]
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -94,13 +93,13 @@ class SurfaceDensityData:
     ----------
     name : str
         The name of the dataset.
-    projection_xy : NDArray[float]
+    projection_xy : Array3D[f32]
         The surface density in the xy projection.
-    projection_xz : NDArray[float]
+    projection_xz : Array3D[f32]
         The surface density in the xz projection.
-    projection_yz : NDArray[float]
+    projection_yz : Array3D[f32]
         The surface density in the yz projection.
-    flat_projection_xy : NDArray[float]
+    flat_projection_xy : Array3D[f32]
         The flattened surface density in the xy projection.
     extent : float
         The half-width of all axes.
@@ -122,10 +121,10 @@ class SurfaceDensityData:
         self,
         *,
         name: str,
-        projection_xy: NDArray[float32],
-        projection_xz: NDArray[float32],
-        projection_yz: NDArray[float32],
-        flat_projection_xy: NDArray[float32],
+        projection_xy: _Array3D_f32,
+        projection_xz: _Array3D_f32,
+        projection_yz: _Array3D_f32,
+        flat_projection_xy: _Array3D_f32,
         extent: float,
         num_bins: int,
         disc_profile: ExponentialDiscProfileData,
@@ -136,13 +135,13 @@ class SurfaceDensityData:
         ----------
         name : str
             The name of the dataset.
-        projection_xy : NDArray[float]
+        projection_xy : Array3D[f32]
             The surface density in the xy projection.
-        projection_xz : NDArray[float]
+        projection_xz : Array3D[f32]
             The surface density in the xz projection.
-        projection_yz : NDArray[float]
+        projection_yz : Array3D[f32]
             The surface density in the yz projection.
-        flat_projection_xy : NDArray[float]
+        flat_projection_xy : Array3D[f32]
             The flattened surface density in the xy projection.
         extent : float
             The half-width of all axes.
@@ -157,10 +156,10 @@ class SurfaceDensityData:
 
         """
         self.name: str = name
-        self.projection_xy: NDArray[float32] = projection_xy
-        self.projection_xz: NDArray[float32] = projection_xz
-        self.projection_yz: NDArray[float32] = projection_yz
-        self.flat_projection_xy: NDArray[float32] = flat_projection_xy
+        self.projection_xy: _Array3D_f32 = projection_xy
+        self.projection_xz: _Array3D_f32 = projection_xz
+        self.projection_yz: _Array3D_f32 = projection_yz
+        self.flat_projection_xy: _Array3D_f32 = flat_projection_xy
         self.extent: float = extent
         self.num_bins: int = num_bins
         self.disc_profile: ExponentialDiscProfileData = disc_profile
@@ -179,12 +178,12 @@ class SurfaceDensityData:
 
         # Useful properties
         self.pixel_to_distance: float = 2 * self.extent / self.num_bins
-        self.overdensity: NDArray[float32] = np.divide(
+        self.overdensity: _Array3D_f32 = np.divide(
             self.flat_projection_xy,
             self.flat_projection_xy[:, :, 0][:, :, None],
             where=self.flat_projection_xy[:, :, 0][:, :, None] != 0,
         )
-        self.density_contrast: NDArray[float32] = self.overdensity - 1
+        self.density_contrast: _Array3D_f32 = self.overdensity - 1
 
     def __eq__(self, other: object) -> bool:
         """Compare for equality.
@@ -241,11 +240,12 @@ class SurfaceDensityData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
-            projection_xy = read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=float32)
-            projection_xz = read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=float32)
-            projection_yz = read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=float32)
-
-            flat_projection_xy = read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=float32)
+            projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float32))
+            projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float32))
+            projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float32))
+            flat_projection_xy = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=np.float32)
+            )
 
             disc_profile = ExponentialDiscProfileData.load_from(file)
 
@@ -359,13 +359,13 @@ class SurfaceDensityData:
         """
         return float(np.nanmax(self.flat_projection_xy))
 
-    def get_dummy_data(self) -> NDArray[float32]:
+    def get_dummy_data(self) -> _Array2D_f32:
         """Return an array of ones with the same shape as the grid.
 
         Returns
         -------
-        NDArray[float32]
+        _Array2D_f32
             The array of ones with the same shape as the grid.
 
         """
-        return np.ones((self.num_bins, self.num_bins), dtype=float32)
+        return np.ones((self.num_bins, self.num_bins), dtype=np.float32)

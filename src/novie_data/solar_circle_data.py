@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Self
 from h5py import File as Hdf5File
 from packaging.version import Version
 
-from novie_data.errors import verify_value_is_nonnegative
+from novie_data.errors import verify_value_is_positive
 
 from .serde.accessors import get_float_attr_from_hdf5, get_str_attr_from_hdf5
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
@@ -45,9 +45,7 @@ class SolarCircleData:
 
     def __post_init__(self) -> None:
         """Perform post-initialisation verification."""
-        verify_value_is_nonnegative(
-            self.solar_radius, msg=f"Expected solar radius to be positive but got {self.solar_radius} kpc"
-        )
+        verify_value_is_positive(self.solar_radius, msg=f"Expected solar radius to be positive but got {self.solar_radius} kpc")
 
     def dump(self, path: Path) -> None:
         """Serialize data to disk.

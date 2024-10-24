@@ -12,6 +12,8 @@ from h5py import File as Hdf5File
 from numpy import float32
 from packaging.version import Version
 
+from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape
+
 from .serde.accessors import (
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
@@ -164,24 +166,16 @@ class SurfaceDensityData:
         self.disc_profile: ExponentialDiscProfileData = disc_profile
 
         # Verify that the projections are the same size
-        same_shape = (
-            self.projection_xy.shape == self.projection_xz.shape
-            and self.projection_xy.shape == self.projection_yz.shape
-            and self.flat_projection_xy.shape == self.projection_xy.shape
+        verify_arrays_have_same_shape(
+            [self.projection_xy, self.projection_xz, self.projection_yz, self.flat_projection_xy],
+            msg="Projections differ in shape!",
         )
-        if not same_shape:
-            msg = "The projections differ in shape!"
-            msg += f"xy = {self.projection_xy.shape}, xz = {self.projection_xz.shape}, yz = {self.projection_yz.shape}"
-            raise ValueError(msg)
-        # Verify that the projection has the expected dimension
-        shape = self.projection_xz.shape
-        if len(shape) != 3:
-            msg = "Expected projections to be a 3D array of `(num_bins, num_bins, num_frames)`"
-            raise ValueError(msg)
-        # Verify that the projection has expected shape
-        if shape[0] != self.num_bins or shape[1] != self.num_bins:
-            msg = f"Expected each slice to be ({self.num_bins}, {self.num_bins}) but got ({shape[0]}, {shape[1]})"
-            raise ValueError(msg)
+        verify_arrays_have_correct_length(
+            [(self.projection_xy, 0)], num_bins, msg=f"Expected the projection to have {num_bins} rows!"
+        )
+        verify_arrays_have_correct_length(
+            [(self.projection_xy, 1)], num_bins, msg=f"Expected the projection to have {num_bins} columns!"
+        )
 
         # Useful properties
         self.pixel_to_distance: float = 2 * self.extent / self.num_bins

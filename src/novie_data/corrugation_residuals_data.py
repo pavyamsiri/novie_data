@@ -10,6 +10,7 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 
 from novie_data._type_utils import Array1D, Array2D, Array3D, verify_array_is_1d, verify_array_is_2d, verify_array_is_3d
+from novie_data.errors import verify_arrays_are_consistent, verify_arrays_have_same_shape
 
 from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
@@ -81,6 +82,37 @@ class CorrugationResidualsData:
         self.relative_errors: _Array3D_f32 = relative_errors
         self.sum_of_square_residuals: _Array2D_f32 = sum_of_square_residuals
         self.mean_absolute_relative_error: _Array2D_f32 = mean_absolute_relative_error
+
+        verify_arrays_have_same_shape(
+            [self.residuals, self.relative_errors],
+            msg="Expected the residuals and relative errors arrays to have the same shape!",
+        )
+        verify_arrays_have_same_shape(
+            [self.sum_of_square_residuals, self.mean_absolute_relative_error],
+            msg="Expected the SSE and MARE arrays to have the same shape!",
+        )
+        verify_arrays_are_consistent(
+            [(self.radii, 0), (self.residuals, 0), (self.relative_errors, 0)],
+            msg="Expected the radii, residuals and relative errors arrays to have the same number of rows.",
+        )
+        verify_arrays_are_consistent(
+            [
+                (self.residuals, 1),
+                (self.relative_errors, 1),
+                (self.sum_of_square_residuals, 0),
+                (self.mean_absolute_relative_error, 0),
+            ],
+            msg="Expected the arrays to have the same number of frames!",
+        )
+        verify_arrays_are_consistent(
+            [
+                (self.residuals, 2),
+                (self.relative_errors, 2),
+                (self.sum_of_square_residuals, 1),
+                (self.mean_absolute_relative_error, 1),
+            ],
+            msg="Expected the arrays to have the same number of neighbourhoods!",
+        )
 
     def __eq__(self, other: object, /) -> bool:
         """Compare for equality.

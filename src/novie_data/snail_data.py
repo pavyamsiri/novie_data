@@ -119,25 +119,56 @@ class SnailPlotColoring(Enum):
 class SnailData:
     """The snail data of a snapshot."""
 
-    # Data products
-    surface_density: NDArray[float32]
-    azimuthal_velocity: NDArray[float32]
-    radial_velocity: NDArray[float32]
-    neighbourhood_data: SphericalNeighbourhoodData
-
-    # Metadata
-    num_height_bins: int
-    num_velocity_bins: int
-    max_height: float
-    max_velocity: float
-
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
     VERSION: ClassVar[Version] = Version("4.0.0")
 
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
+    def __init__(
+        self,
+        *,
+        name: str,
+        surface_density: NDArray[float32],
+        azimuthal_velocity: NDArray[float32],
+        radial_velocity: NDArray[float32],
+        neighbourhood_data: SphericalNeighbourhoodData,
+        num_height_bins: int,
+        num_velocity_bins: int,
+        max_height: float,
+        max_velocity: float,
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the dataset.
+        surface_density : Array4D[f32]
+            The surface density for each neighbourhood and frame.
+        azimuthal_velocity : Array4D[f32]
+            The azimuthal velocity for each neighbourhood and frame.
+        radial_velocity : Array4D[f32]
+            The radial velocity for each neighbourhood and frame.
+        neighbourhood_data : SphericalNeighbourhoodData
+            The neighbourhood data.
+        num_height_bins : int
+            The number of height bins.
+        num_velocity_bins : int
+            The number of velocity bins.
+        max_height : float
+            The maximum absolute height in units of kpc.
+        max_velocity : float
+            The maximum absolute velocity in units of km/s.
+
+        """
+        self.name: str = name
+        self.surface_density: NDArray[float32] = surface_density
+        self.azimuthal_velocity: NDArray[float32] = azimuthal_velocity
+        self.radial_velocity: NDArray[float32] = radial_velocity
+        self.neighbourhood_data: SphericalNeighbourhoodData = neighbourhood_data
+        self.num_height_bins: int = num_height_bins
+        self.num_velocity_bins: int = num_velocity_bins
+        self.max_height: float = max_height
+        self.max_velocity: float = max_velocity
+
         # Validate shapes
         same_shape = (
             self.surface_density.shape == self.azimuthal_velocity.shape
@@ -146,6 +177,38 @@ class SnailData:
         if not same_shape:
             msg = "The colorings differ in shape!"
             raise ValueError(msg)
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.neighbourhood_data == other.neighbourhood_data
+        equality &= np.all(self.surface_density == other.surface_density)
+        equality &= np.all(self.azimuthal_velocity == other.azimuthal_velocity)
+        equality &= np.all(self.radial_velocity == other.radial_velocity)
+        equality &= self.num_height_bins == other.num_height_bins
+        equality &= self.num_velocity_bins == other.num_velocity_bins
+        equality &= self.max_height == other.max_height
+        equality &= self.max_velocity == other.max_velocity
+        return bool(equality)
 
     @classmethod
     def load(cls, path: Path) -> Self:

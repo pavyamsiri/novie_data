@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
 
+from novie_data._type_utils import Array1D, Array3D, verify_array_is_1d, verify_array_is_3d
 from novie_data.errors import (
     verify_arrays_have_correct_length,
     verify_arrays_have_same_shape,
@@ -28,7 +29,9 @@ from .serde.verification import verify_file_type_from_hdf5, verify_file_version_
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from numpy.typing import NDArray
+
+_Array1D_f32: TypeAlias = Array1D[np.float32]
+_Array3D_f32: TypeAlias = Array3D[np.float32]
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -68,9 +71,9 @@ class WrinkleData:
         self,
         *,
         name: str,
-        angular_momentum: NDArray[np.float32],
-        mean_radial_velocity: NDArray[np.float32],
-        mean_radial_velocity_error: NDArray[np.float32],
+        angular_momentum: _Array1D_f32,
+        mean_radial_velocity: _Array3D_f32,
+        mean_radial_velocity_error: _Array3D_f32,
         min_lz: float,
         max_lz: float,
         num_bins: int,
@@ -103,9 +106,9 @@ class WrinkleData:
 
         """
         self.name: str = name
-        self.angular_momentum: NDArray[np.float32] = angular_momentum
-        self.mean_radial_velocity: NDArray[np.float32] = mean_radial_velocity
-        self.mean_radial_velocity_error: NDArray[np.float32] = mean_radial_velocity_error
+        self.angular_momentum: _Array1D_f32 = angular_momentum
+        self.mean_radial_velocity: _Array3D_f32 = mean_radial_velocity
+        self.mean_radial_velocity_error: _Array3D_f32 = mean_radial_velocity_error
         self.min_lz: float = min_lz
         self.max_lz: float = max_lz
         self.num_bins: int = num_bins
@@ -193,9 +196,13 @@ class WrinkleData:
             name: str = get_str_attr_from_hdf5(file, "name")
 
             # Projections
-            angular_momentum = read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float32)
-            mean_radial_velocity = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float32)
-            mean_radial_velocity_error = read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float32)
+            angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float32))
+            mean_radial_velocity = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float32)
+            )
+            mean_radial_velocity_error = verify_array_is_3d(
+                read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float32)
+            )
 
             neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
 

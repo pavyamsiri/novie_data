@@ -12,7 +12,7 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 
 from novie_data._type_utils import Array2D, Array3D, verify_array_is_3d
-from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape
+from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
 
 from .serde.accessors import (
     get_float_attr_from_hdf5,
@@ -45,6 +45,11 @@ class ExponentialDiscProfileData:
 
     scale_mass: float
     scale_length: float
+
+    def __post_init__(self) -> None:
+        """Perform post-initialisation verification."""
+        verify_value_is_positive(self.scale_mass, msg="Expected the scale mass to be positive!")
+        verify_value_is_positive(self.scale_length, msg="Expected the scale length to be positive!")
 
     def dump_into(self, out_file: Hdf5File) -> None:
         """Deserialize exponential disc parameters to file.
@@ -163,6 +168,10 @@ class SurfaceDensityData:
         self.extent: float = extent
         self.num_bins: int = num_bins
         self.disc_profile: ExponentialDiscProfileData = disc_profile
+
+        # Verify values
+        verify_value_is_positive(self.extent, msg="Expected the extent to be positive!")
+        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
 
         # Verify that the projections are the same size
         verify_arrays_have_same_shape(

@@ -1,52 +1,112 @@
 """Data representing residuals and errors between observed and simulated corrugation data."""
 
+from __future__ import annotations
+
 import logging
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
 from h5py import File as Hdf5File
 from numpy import float32
-from numpy.typing import NDArray
 from packaging.version import Version
 
 from .serde.accessors import get_str_attr_from_hdf5, read_dataset_from_hdf5_with_dtype
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from numpy.typing import NDArray
+
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
 class CorrugationResidualsData:
     """Data class to store residuals and errors from corrugation data processing.
 
     Attributes
     ----------
-    residuals : NDArray[float32]
-        The residuals between the test mean height and the expected mean height in units of kpc.
-    errors : NDArray[float32]
-        The sum of square residuals for each frame and filter in units of kpc**2.
-    relative_residuals : NDArray[float32]
-        The relative residuals between the test mean height and the expected mean height.
-    relative_errors : NDArray[float32]
-        The mean absolute relative error.
-    radii : NDArray[float32]
-        The central radius value for each radial bin in units of kpc.
     name : str
-        The name of the dataset.
+        The name of the data set.
+    radii : Array1D[f32]
+        The central radius value for each radial bin in units of kpc.
+    residuals : Array3D[f32]
+        The residuals between the test mean height and the expected mean height in units of kpc.
+    relative_errors : Array3D[f32]
+        The relative residuals between the test mean height and the expected mean height.
+    sum_of_square_residuals: Array2D[f32]
+        The sum of square residuals for each frame and filter in units of kpc**2.
+    mean_absolute_relative_error : Array2D[f32]
+        The mean absolute relative error.
 
     """
 
-    residuals: NDArray[float32]
-    sum_of_square_residuals: NDArray[float32]
-    relative_errors: NDArray[float32]
-    mean_absolute_relative_error: NDArray[float32]
-    radii: NDArray[float32]
-    name: str
-
     DATA_FILE_TYPE: ClassVar[str] = "CorrugationResiduals"
     VERSION: ClassVar[Version] = Version("1.0.0")
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        radii: NDArray[float32],
+        residuals: NDArray[float32],
+        relative_errors: NDArray[float32],
+        sum_of_square_residuals: NDArray[float32],
+        mean_absolute_relative_error: NDArray[float32],
+    ) -> None:
+        """Initialize the data class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the data set.
+        radii : Array1D[f32]
+            The central radius value for each radial bin in units of kpc.
+        residuals : Array3D[f32]
+            The residuals between the test mean height and the expected mean height in units of kpc.
+        relative_errors : Array3D[f32]
+            The relative residuals between the test mean height and the expected mean height.
+        sum_of_square_residuals: Array2D[f32]
+            The sum of square residuals for each frame and filter in units of kpc**2.
+        mean_absolute_relative_error : Array2D[f32]
+            The mean absolute relative error.
+
+        """
+        self.name: str = name
+        self.radii: NDArray[float32] = radii
+        self.residuals: NDArray[float32] = residuals
+        self.relative_errors: NDArray[float32] = relative_errors
+        self.sum_of_square_residuals: NDArray[float32] = sum_of_square_residuals
+        self.mean_absolute_relative_error: NDArray[float32] = mean_absolute_relative_error
+
+    def __eq__(self, other: object, /) -> bool:
+        """Compare for equality.
+
+        Parameters
+        ----------
+        other : object
+            The object to compare to.
+
+        Returns
+        -------
+        bool
+            `True` if the other object is equal to this object, `False` otherwise.
+
+        Notes
+        -----
+        Equality means all fields are equal.
+
+        """
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= np.all(self.radii == other.radii)
+        equality &= np.all(self.residuals == other.residuals)
+        equality &= np.all(self.relative_errors == other.relative_errors)
+        equality &= np.all(self.sum_of_square_residuals == other.sum_of_square_residuals)
+        equality &= np.all(self.mean_absolute_relative_error == other.mean_absolute_relative_error)
+        return bool(equality)
 
     def get_argmin_over_absolute(self) -> tuple[int, int]:
         """Get the frame and filter indices that minimises the sum of square residuals.

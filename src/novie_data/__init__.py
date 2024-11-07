@@ -30,4 +30,4 @@ __all__ = [
     "NovieData",
 ]
 
-__version__: str = "2.1.0"
+__version__: str = "3.0.0"

@@ -23,11 +23,10 @@ def test_wrinkle_residuals_data_init() -> None:
     sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
     s = WrinkleResidualsData(
         name="test",
-        angular_momentum=angular_momentum,
-        residuals=residuals,
-        relative_errors=residuals,
-        sum_of_square_residuals=sse,
-        mean_absolute_relative_error=sse,
+        metric_name="sse",
+        metric=residuals,
+        summary=sse,
+        bin_values=angular_momentum,
     )
     assert s.name == "test"
 
@@ -50,11 +49,10 @@ def test_wrinkle_residuals_data_serde(tmp_path: Path) -> None:
     sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
     s = WrinkleResidualsData(
         name="test",
-        angular_momentum=angular_momentum,
-        residuals=residuals,
-        relative_errors=residuals,
-        sum_of_square_residuals=sse,
-        mean_absolute_relative_error=sse,
+        metric_name="sse",
+        metric=residuals,
+        summary=sse,
+        bin_values=angular_momentum,
     )
     s.dump(output_path)
     t = WrinkleResidualsData.load(output_path)

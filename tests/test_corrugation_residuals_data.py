@@ -23,11 +23,10 @@ def test_corrugation_residuals_data_init() -> None:
     sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
     s = CorrugationResidualsData(
         name="test",
-        radii=radii,
-        residuals=residuals,
-        relative_errors=residuals,
-        sum_of_square_residuals=sse,
-        mean_absolute_relative_error=sse,
+        metric_name="sse",
+        metric=residuals,
+        summary=sse,
+        bin_values=radii,
     )
     assert s.name == "test"
 
@@ -50,11 +49,10 @@ def test_corrugation_residuals_data_serde(tmp_path: Path) -> None:
     sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
     s = CorrugationResidualsData(
         name="test",
-        radii=radii,
-        residuals=residuals,
-        relative_errors=residuals,
-        sum_of_square_residuals=sse,
-        mean_absolute_relative_error=sse,
+        metric_name="sse",
+        metric=residuals,
+        summary=sse,
+        bin_values=radii,
     )
     s.dump(output_path)
     t = CorrugationResidualsData.load(output_path)

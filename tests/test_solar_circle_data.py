@@ -40,3 +40,15 @@ def test_solar_circle_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = SolarCircleData.load(output_path)
     assert s == t
+
+
+def test_solar_circle_data_deserialization_v0() -> None:
+    """Test deserialization of v0."""
+    solar_radius: float = 1.0
+    omega: float = 0.0
+
+    input_path = Path("test_data/solar_circle_v0.hdf5")
+    t = SolarCircleData.load(input_path)
+
+    assert t.solar_radius == solar_radius
+    assert t.omega == omega

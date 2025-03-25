@@ -101,3 +101,19 @@ def test_corrugation_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = CorrugationData.load(output_path)
     assert s == t
+
+
+def test_corrugation_data_deserialization_v3() -> None:
+    """Test deserialization of v3."""
+    num_height_bins: int = 36
+    num_radial_bins: int = 20
+    num_neighbourhoods: int = 7
+    num_frames: int = 4
+
+    input_path = Path("test_data/corrugation_v3.hdf5")
+    t = CorrugationData.load(input_path)
+
+    assert t.radial_bins.num_bins == num_radial_bins
+    assert t.height_bins.num_bins == num_height_bins
+    assert t.num_frames == num_frames
+    assert t.projection_rz.shape == (num_height_bins, num_radial_bins, num_frames, num_neighbourhoods)

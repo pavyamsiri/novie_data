@@ -71,3 +71,26 @@ def test_ridge_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = RidgeData.load(output_path)
     assert s == t
+
+
+def test_ridge_data_deserialization_v2() -> None:
+    """Test deserialization of v2."""
+    num_radial_bins: int = 13
+    num_velocity_bins: int = 123
+    num_frames: int = 3
+    min_radius: float = 0.0
+    max_radius: float = 123.0
+    min_velocity: float = -12
+    max_velocity: float = -10
+
+    input_path = Path("test_data/ridge_v2.hdf5")
+    t = RidgeData.load(input_path)
+
+    assert t.num_radial_bins == num_radial_bins
+    assert t.num_velocity_bins == num_velocity_bins
+    assert t.min_radius == min_radius
+    assert t.max_radius == max_radius
+    assert t.min_velocity == min_velocity
+    assert t.max_velocity == max_velocity
+    assert t.num_frames == num_frames
+    assert t.mass_density.shape == (num_velocity_bins, num_radial_bins, num_frames)

@@ -63,3 +63,15 @@ def test_arm_coverage_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = SpiralArmCoverageData.load(output_path)
     assert s == t
+
+
+def test_arm_coverage_data_deserialization_v2() -> None:
+    """Test deserialization of v2."""
+    num_neighbourhoods: int = 7
+    num_arms: int = 4
+    num_frames: int = 20
+
+    input_path = Path("test_data/arm_coverage_v2.hdf5")
+    t = SpiralArmCoverageData.load(input_path)
+
+    assert t.arm_coverage.shape == (num_neighbourhoods, num_arms, num_frames)

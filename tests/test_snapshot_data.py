@@ -42,3 +42,13 @@ def test_snapshot_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = SnapshotData.load(output_path)
     assert s == t
+
+
+def test_snapshot_data_deserialization_v0() -> None:
+    """Test deserialization of v3."""
+    num_frames: int = 5
+
+    input_path = Path("test_data/snapshot_v0.hdf5")
+    t = SnapshotData.load(input_path)
+
+    assert t.num_frames == num_frames

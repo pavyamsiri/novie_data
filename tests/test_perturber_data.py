@@ -75,3 +75,12 @@ def test_perturber_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = PerturberData.load(output_path)
     assert s == t
+
+
+def test_perturber_data_deserialization_v2() -> None:
+    """Test deserialization of v2."""
+    num_frames: int = 20
+    input_path = Path("test_data/perturber_v2.hdf5")
+    t = PerturberData.load(input_path)
+
+    assert t.num_frames == num_frames

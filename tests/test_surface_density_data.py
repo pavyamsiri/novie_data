@@ -108,3 +108,21 @@ def test_surface_density_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = SurfaceDensityData.load(output_path)
     assert s == t
+
+
+def test_surface_density_data_deserialization_v3() -> None:
+    """Test deserialization of v3."""
+    scale_mass: float = 1e5
+    scale_length: float = 3
+    extent: float = 20.0
+    num_bins: int = 2
+    num_frames: int = 7
+
+    input_path = Path("test_data/surface_density_v3.hdf5")
+    t = SurfaceDensityData.load(input_path)
+
+    assert t.num_bins == num_bins
+    assert t.density_contrast.shape == (num_bins, num_bins, num_frames)
+    assert t.extent == extent
+    assert t.disc_profile.scale_mass == scale_mass
+    assert t.disc_profile.scale_length == scale_length

@@ -57,3 +57,15 @@ def test_corrugation_residuals_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = CorrugationResidualsData.load(output_path)
     assert s == t
+
+
+def test_corrugation_residuals_data_deserialization_v2() -> None:
+    """Test deserialization of v2."""
+    num_radial_bins: int = 123
+    num_frames: int = 7
+    num_neighbourhoods: int = 87
+
+    input_path = Path("test_data/corrugation_residuals_v2.hdf5")
+    t = CorrugationResidualsData.load(input_path)
+
+    assert t.metric.shape == (num_radial_bins, num_frames, num_neighbourhoods)

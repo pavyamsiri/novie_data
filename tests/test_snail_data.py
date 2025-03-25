@@ -72,3 +72,19 @@ def test_snail_data_serde(tmp_path: Path) -> None:
     s.dump(output_path)
     t = SnailData.load(output_path)
     assert s == t
+
+
+def test_snail_data_deserialization_v4() -> None:
+    """Test deserialization of v4."""
+    num_height_bins: int = 36
+    num_velocity_bins: int = 20
+    num_neighbourhoods: int = 7
+    num_frames: int = 4
+
+    input_path = Path("test_data/snail_v4.hdf5")
+    t = SnailData.load(input_path)
+
+    assert t.num_height_bins == num_height_bins
+    assert t.num_velocity_bins == num_velocity_bins
+    assert t.num_frames == num_frames
+    assert t.surface_density.shape == (num_velocity_bins, num_height_bins, num_frames, num_neighbourhoods)

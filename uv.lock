@@ -52,7 +52,7 @@ wheels = [
 
 [[package]]
 name = "novie-data"
-version = "3.0.0"
+version = "4.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "h5py" },

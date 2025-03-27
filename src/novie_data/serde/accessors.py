@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, SupportsFloat, SupportsInt, TypeVar, cast
 import numpy as np
 from h5py import Dataset as Hdf5Dataset
 from h5py import File as Hdf5File
+from packaging.version import Version
 
 from novie_data._type_utils import AnyArray, Array, require_dtype
 
@@ -16,9 +17,58 @@ if TYPE_CHECKING:
 
 
 _ST = TypeVar("_ST", bound=np.generic)
+type _DType = np.dtype[np.generic]
 
 
 log: logging.Logger = logging.getLogger(__name__)
+
+
+def get_dataset_metadata(file: Hdf5File, name: str) -> tuple[tuple[int, ...], _DType]:
+    """Get the dataset's metadata.
+
+    Parameters
+    ----------
+    file : h5py.File
+        The hdf5 file to read from.
+    name : str
+        The name of the dataset to read from.
+
+    Returns
+    -------
+    shape : tuple[int, ...]
+        The dataset shape.
+    dtype : DType
+        The dataset data type.
+
+    """
+    value = file[name]
+    if not isinstance(value, Hdf5Dataset):
+        msg = f"`{name}` is not a dataset of {file}!"
+        raise TypeError(msg)
+    return (value.shape, value.dtype)
+
+
+def get_dataset_from_hdf5(file: Hdf5File, name: str) -> Hdf5Dataset:
+    """Get a dataset from a hdf5 file.
+
+    Parameters
+    ----------
+    file : h5py.File
+        The hdf5 file to read from.
+    name : str
+        The name of the dataset to read from.
+
+    Returns
+    -------
+    dataset : h5py.Dataset
+        The dataset.
+
+    """
+    value = file[name]
+    if not isinstance(value, Hdf5Dataset):
+        msg = f"`{name}` is not a dataset of {file}!"
+        raise TypeError(msg)
+    return value
 
 
 def get_and_read_dataset_from_hdf5(file: Hdf5File, name: str) -> tuple[AnyArray, Hdf5Dataset]:
@@ -197,6 +247,24 @@ def get_str_attr_from_hdf5(file: Hdf5File, name: str) -> str:
 
     """
     return str(file.attrs[name])
+
+
+def get_file_version(file: Hdf5File) -> Version:
+    """Return the file version.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The HDF5 file to read from.
+
+    Returns
+    -------
+    version : Version
+        The file version.
+
+    """
+    version_str: str = get_str_attr_from_hdf5(file, "version")
+    return Version(version_str)
 
 
 def _verify_ndarray(arr: object, msg: str) -> AnyArray:

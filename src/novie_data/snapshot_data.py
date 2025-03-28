@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-_Array1D_f32: TypeAlias = Array1D[np.float32]
-_Array1D_u32: TypeAlias = Array1D[np.uint32]
+_Array1D_f64: TypeAlias = Array1D[np.float64]
+_Array1D_u16: TypeAlias = Array1D[np.uint16]
 _Array1D_b8: TypeAlias = Array1D[np.bool_]
 
 
@@ -41,6 +41,12 @@ class _SnapshotDataConverter(Protocol):
     def __call__(self, file: Hdf5File, *, is_complete: bool) -> None: ...
 
 
+class _SnapshotDataVerifier(Protocol):
+    """Description of a `SnapshotData` file verifier function."""
+
+    def __call__(self, file: Hdf5File) -> int: ...
+
+
 LATEST_VERSION_V1: Version = Version("1.0.0")
 
 
@@ -51,29 +57,33 @@ class SnapshotData:
     ----------
     name : str
         The name of the dataset.
-    codes : Array1D[u32]
+    codes : Array1D[u16]
         The snapshot codes.
-    times : Array1D[f32]
+    times : Array1D[f64]
         The time associated with each snapshot in Myr.
+    completeness : Array1D[b8]
+        A flag associated with each snapshot that shows whether data has been written to it yet.
 
     Notes
     -----
     v0 -> v1:
         - Added completeness {Array1D[b8]} field that tracks if a frame has been written to yet.
+        - Change times dtype from f32 -> f64; better precision
+        - Change codes dtype from u32 -> u16; unlikely that 2^16 - 1 limit will be reached.
 
     """
 
     DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
     VERSION: ClassVar[Version] = LATEST_VERSION_V1
 
-    def __init__(self, name: str, codes: _Array1D_u32, times: _Array1D_f32, *, complete: _Array1D_b8 | bool = False) -> None:
+    def __init__(self, name: str, codes: _Array1D_u16, times: _Array1D_f64, *, complete: _Array1D_b8 | bool = False) -> None:
         """Initialize the snapshot data.
 
         Parameters
         ----------
         name : str
             The name of the dataset.
-        codes : Array1D[u32]
+        codes : Array1D[u16]
             The snapshot codes.
         times : Array1D[f32]
             The time associated with each snapshot in Myr.
@@ -97,8 +107,8 @@ class SnapshotData:
         )
 
         self.name: str = name
-        self.codes: _Array1D_u32 = codes
-        self.times: _Array1D_f32 = times
+        self.codes: _Array1D_u16 = codes
+        self.times: _Array1D_f64 = times
         self.num_frames: int = num_times
         self.completeness: _Array1D_b8 = completeness
 
@@ -112,8 +122,8 @@ class SnapshotData:
             The number of frames.
 
         """
-        codes: _Array1D_u32 = np.zeros(num_frames, dtype=np.uint32)
-        times: _Array1D_f32 = np.zeros(num_frames, dtype=np.float32)
+        codes: _Array1D_u16 = np.zeros(num_frames, dtype=np.uint16)
+        times: _Array1D_f64 = np.zeros(num_frames, dtype=np.float64)
         return cls("UNKNOWN", codes, times, complete=False)
 
     def __eq__(self, other: object) -> bool:
@@ -214,10 +224,10 @@ class SnapshotData:
             cls.migrate_version(file, cls.VERSION, is_complete=False)
 
             get_dataset_from_hdf5(file, "codes").write_direct(
-                np.asarray(code, dtype=np.uint32).reshape(1), np.s_[0], np.s_[frame]
+                np.asarray(code, dtype=np.uint16).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "times").write_direct(
-                np.asarray(time, dtype=np.float32).reshape(1), np.s_[0], np.s_[frame]
+                np.asarray(time, dtype=np.float64).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(a=True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
@@ -225,16 +235,16 @@ class SnapshotData:
         log.info("Successfully saved [cyan]%s[/cyan] frame to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
-    def save_chunk(cls, chunk_slice: Index1D, codes: _Array1D_u32, times: _Array1D_f32, path: Path) -> None:
+    def save_chunk(cls, chunk_slice: Index1D, codes: _Array1D_u16, times: _Array1D_f64, path: Path) -> None:
         """Serialize frame data to disk.
 
         Parameters
         ----------
         chunk_slice : Index1D
             The frames to write to.
-        codes : Array1D[u32]
+        codes : Array1D[u16]
             The snapshot codes.
-        times : Array1D[f32]
+        times : Array1D[f64]
             The simulation times in Myr.
         path : Path
             The path to the data.
@@ -307,8 +317,8 @@ class SnapshotData:
                 complete = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
 
             name: str = get_str_attr_from_hdf5(file, "name")
-            codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint32))
-            times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float32))
+            codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16))
+            times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
         return cls(
@@ -335,30 +345,10 @@ class SnapshotData:
             The total number of frames.
 
         """
-        verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-
-        file_version: Version = get_file_version(file)
-        is_old = file_version.major == 0
-
-        codes_shape, codes_dtype = get_dataset_metadata(file, "codes")
-        assert codes_dtype == np.uint32
-        times_shape, times_dtype = get_dataset_metadata(file, "times")
-        assert times_dtype == np.float32
-        shapes: list[tuple[int, ...]] = [codes_shape, times_shape]
-
-        if not is_old:
-            completeness_shape, completeness_dtype = get_dataset_metadata(file, "completeness")
-            assert completeness_dtype == np.bool_
-            shapes.append(completeness_shape)
-
-        # Assert 1D
-        dimensions = [len(shape) for shape in shapes]
-        assert dimensions.count(1) == len(dimensions)
-
-        # Assert consistency
-        assert dimensions.count(dimensions[0]) == len(dimensions)
-
-        return (file_version, dimensions[0])
+        file_version = get_file_version(file)
+        assert file_version.major in _VERIFIERS
+        num_frames: int = _VERIFIERS[file_version.major](file)
+        return (file_version, num_frames)
 
     @classmethod
     def migrate_version(cls, file: Hdf5File, target_version: Version, *, is_complete: bool) -> None:
@@ -418,3 +408,73 @@ def convert_v0_to_v1(file: Hdf5File, *, is_complete: bool) -> None:
 
 
 _CONVERTERS: Mapping[tuple[int, int], _SnapshotDataConverter] = {(1, 0): convert_v0_to_v1}
+
+
+def verify_v0(file: Hdf5File) -> int:
+    """Verify v0 data.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The open file.
+
+    Returns
+    -------
+    num_frames : int
+        The number of frames.
+
+    """
+    file_version: Version = get_file_version(file)
+    assert file_version.major == 0
+
+    codes_shape, codes_dtype = get_dataset_metadata(file, "codes")
+    times_shape, times_dtype = get_dataset_metadata(file, "times")
+    assert codes_dtype == np.uint32
+    assert times_dtype == np.float32
+    shapes: list[tuple[int, ...]] = [codes_shape, times_shape]
+
+    # Assert 1D
+    dimensions = [len(shape) for shape in shapes]
+    assert dimensions.count(1) == len(dimensions)
+
+    # Assert consistency
+    assert dimensions.count(dimensions[0]) == len(dimensions)
+    return dimensions[0]
+
+
+def verify_v1(file: Hdf5File) -> int:
+    """Verify v1 data.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The open file.
+
+    Returns
+    -------
+    num_frames : int
+        The number of frames.
+
+    """
+    file_version: Version = get_file_version(file)
+    assert file_version.major == 1
+
+    codes_shape, codes_dtype = get_dataset_metadata(file, "codes")
+    times_shape, times_dtype = get_dataset_metadata(file, "times")
+    completeness_shape, completeness_dtype = get_dataset_metadata(file, "completeness")
+    assert codes_dtype == np.uint16
+    assert times_dtype == np.float64
+    assert completeness_dtype == np.bool_
+    shapes: list[tuple[int, ...]] = [codes_shape, times_shape, completeness_shape]
+
+    # Assert 1D
+    dimensions = [len(shape) for shape in shapes]
+    assert dimensions.count(1) == len(dimensions)
+
+    # Assert consistency
+    assert dimensions.count(dimensions[0]) == len(dimensions)
+
+    return dimensions[0]
+
+
+_VERIFIERS: Mapping[int, _SnapshotDataVerifier] = {0: verify_v0, 1: verify_v1}

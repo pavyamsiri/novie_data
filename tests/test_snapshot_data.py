@@ -21,7 +21,7 @@ def test_snapshot_data_protocol() -> None:
 
 def test_snapshot_data_init() -> None:
     """Test the constructor."""
-    s = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint32), times=np.linspace(0, 1000, 5))
+    s = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint16), times=np.linspace(0, 1000, 5))
     count = len(tuple(s.snapshot_names()))
     assert count == 5
 
@@ -29,7 +29,7 @@ def test_snapshot_data_init() -> None:
 def test_snapshot_data_init_inconsistent_lengths() -> None:
     """Test that the constructor errors when the array lengths are inconsistent."""
     with pytest.raises(InconsistentArrayShapeError):
-        _ = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint32), times=np.linspace(0, 1000, 2))
+        _ = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint16), times=np.linspace(0, 1000, 2))
 
 
 def test_snapshot_data_serde(tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_snapshot_data_serde(tmp_path: Path) -> None:
 
     """
     output_path = tmp_path / "test.hdf5"
-    s = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint32), times=np.linspace(0, 1000, 5))
+    s = SnapshotData(name="test", codes=np.arange(5, dtype=np.uint16), times=np.linspace(0, 1000, 5))
     s.dump(output_path)
     t = SnapshotData.load(output_path)
     assert s == t
@@ -69,8 +69,8 @@ def test_snapshot_data_deserialization_v1() -> None:
 
     assert t.num_frames == num_frames
     assert not t.is_complete()
-    assert t.completeness[0]
-    assert np.all(~t.completeness[1:])
+    assert np.all(t.completeness[1::2])
+    assert np.all(~t.completeness[0::2])
 
 
 def test_snapshot_data_incremental_per_frame(tmp_path: Path) -> None:
@@ -121,7 +121,7 @@ def test_snapshot_data_incremental_per_frame(tmp_path: Path) -> None:
         assert s.times[i] == current_time
         assert s.completeness[i]
 
-    SnapshotData.save_chunk(np.s_[7:9], np.array([3, 5], dtype=np.uint32), np.array([0.344, 0.32], dtype=np.float32), output_path)
+    SnapshotData.save_chunk(np.s_[7:9], np.array([3, 5], dtype=np.uint16), np.array([0.344, 0.32], dtype=np.float64), output_path)
     s = SnapshotData.load(output_path)
     assert s.name == "test"
     assert s.num_frames == 10

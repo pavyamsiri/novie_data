@@ -20,7 +20,7 @@ from .serde.accessors import (
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
 )
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
+from .serde.verification import verify_file_type_from_hdf5
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -45,6 +45,12 @@ class _SnapshotDataVerifier(Protocol):
     """Description of a `SnapshotData` file verifier function."""
 
     def __call__(self, file: Hdf5File) -> int: ...
+
+
+class _SnapshotDataLoader(Protocol):
+    """Description of a `SnapshotData` file loader function."""
+
+    def __call__(self, file: Hdf5File) -> SnapshotData: ...
 
 
 LATEST_VERSION_V1: Version = Version("1.0.0")
@@ -293,8 +299,8 @@ class SnapshotData:
             file.create_dataset("completeness", data=self.completeness)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    @classmethod
-    def load(cls, path: Path) -> Self:
+    @staticmethod
+    def load(path: Path) -> SnapshotData:
         """Deserialize data from disk.
 
         Parameters
@@ -303,30 +309,16 @@ class SnapshotData:
             The path to the data.
 
         """
+        cls = SnapshotData
         with Hdf5File(path, "r") as file:
             verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
 
-            # v0
-            file_version: Version = get_file_version(file)
-            complete: _Array1D_b8 | bool
-            if file_version.major == 0:
-                log.debug("Loading %s v0", cls.__name__)
-                complete = True
-            else:
-                verify_file_version_from_hdf5(file, cls.VERSION)
-                complete = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-
-            name: str = get_str_attr_from_hdf5(file, "name")
-            codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16))
-            times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
 
         log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
-        return cls(
-            name=name,
-            codes=codes,
-            times=times,
-            complete=complete,
-        )
+        return data
 
     @classmethod
     def verify_data(cls, file: Hdf5File) -> tuple[Version, int]:
@@ -478,3 +470,61 @@ def verify_v1(file: Hdf5File) -> int:
 
 
 _VERIFIERS: Mapping[int, _SnapshotDataVerifier] = {0: verify_v0, 1: verify_v1}
+
+
+def load_v0(file: Hdf5File) -> SnapshotData:
+    """Deserialize v0 data from disk.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The open file.
+
+    """
+    cls = SnapshotData
+
+    file_version: Version = get_file_version(file)
+    assert file_version.major == 0
+
+    name: str = get_str_attr_from_hdf5(file, "name")
+    codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16))
+    times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
+
+    return cls(
+        name=name,
+        codes=codes,
+        times=times,
+        complete=True,
+    )
+
+
+def load_v1(file: Hdf5File) -> SnapshotData:
+    """Deserialize v1 data from disk.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The open file.
+
+    """
+    cls = SnapshotData
+    verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
+
+    # v0
+    file_version: Version = get_file_version(file)
+    assert file_version.major == 1
+
+    name: str = get_str_attr_from_hdf5(file, "name")
+    codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16))
+    times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
+    complete = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+
+    return cls(
+        name=name,
+        codes=codes,
+        times=times,
+        complete=complete,
+    )
+
+
+_LOADERS: Mapping[int, _SnapshotDataLoader] = {0: load_v0, 1: load_v1}

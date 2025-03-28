@@ -77,30 +77,30 @@ class SnapshotData:
             The snapshot codes.
         times : Array1D[f32]
             The time associated with each snapshot in Myr.
-        complete : bool
-            Set this flag to signify that the given data is complete.
+        complete : Array1D[b8] | bool
+            Set this flag to signify that the given data is complete or give an array of boolean values.
 
         """
         num_times: int = len(times)
-        num_codes: int = len(codes)
+        completeness: _Array1D_b8
+        match complete:
+            case True:
+                completeness = np.ones(num_times, dtype=np.bool_)
+            case False:
+                completeness = np.zeros(num_times, dtype=np.bool_)
+            case _:
+                completeness = complete
 
         verify_arrays_have_same_shape(
-            [codes, times],
-            msg=f"The number of times {num_times} is not equal to the number of snapshot names {num_codes}!",
+            [codes, times, completeness],
+            msg="Expected `codes`, `times` and `completeness` to have the same length.",
         )
 
         self.name: str = name
         self.codes: _Array1D_u32 = codes
         self.times: _Array1D_f32 = times
         self.num_frames: int = num_times
-        self.completeness: _Array1D_b8
-        match complete:
-            case True:
-                self.completeness = np.ones(self.num_frames, dtype=np.bool_)
-            case False:
-                self.completeness = np.zeros(self.num_frames, dtype=np.bool_)
-            case _:
-                self.completeness = complete
+        self.completeness: _Array1D_b8 = completeness
 
     @classmethod
     def empty(cls, num_frames: int) -> Self:

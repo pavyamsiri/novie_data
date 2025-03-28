@@ -32,9 +32,6 @@ _Array1D_u16: TypeAlias = Array1D[np.uint16]
 _Array1D_b8: TypeAlias = Array1D[np.bool_]
 
 
-log: logging.Logger = logging.getLogger(__name__)
-
-
 class _SnapshotDataConverter(Protocol):
     """Description of a `SnapshotData` file converter function."""
 
@@ -54,6 +51,9 @@ class _SnapshotDataLoader(Protocol):
 
 
 LATEST_VERSION_V1: Version = Version("1.0.0")
+
+
+log: logging.Logger = logging.getLogger(__name__)
 
 
 class SnapshotData:
@@ -397,6 +397,14 @@ def convert_v0_to_v1(file: Hdf5File, *, is_complete: bool) -> None:
 
     # Update version
     file.attrs["version"] = str(LATEST_VERSION_V1)
+
+    # Update dtypes
+    old_codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint32))
+    old_times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float32))
+    del file["codes"]
+    del file["times"]
+    file.create_dataset("codes", data=old_codes.astype(np.uint16))
+    file.create_dataset("times", data=old_times.astype(np.float64))
 
 
 _CONVERTERS: Mapping[tuple[int, int], _SnapshotDataConverter] = {(1, 0): convert_v0_to_v1}

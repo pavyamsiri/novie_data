@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -16,12 +16,31 @@ from .serde.accessors import get_file_version, get_str_attr_from_hdf5, read_data
 from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 
 _Array1D_f32: TypeAlias = Array1D[np.float32]
 _Array2D_f32: TypeAlias = Array2D[np.float32]
 _Array1D_b8: TypeAlias = Array1D[np.bool_]
+
+
+class _PerturberDataConverter(Protocol):
+    """Description of a `PerturberData` file converter function."""
+
+    def __call__(self, file: Hdf5File, *, is_complete: bool) -> None: ...
+
+
+class _PerturberDataVerifier(Protocol):
+    """Description of a `PerturberData` file verifier function."""
+
+    def __call__(self, file: Hdf5File) -> int: ...
+
+
+class _PerturberDataLoader(Protocol):
+    """Description of a `PerturberData` file loader function."""
+
+    def __call__(self, file: Hdf5File) -> PerturberData: ...
 
 
 LATEST_VERSION_V2: Version = Version("2.0.0")
@@ -199,3 +218,8 @@ class PerturberData:
     def num_frames(self) -> int:
         """int: The number of frames."""
         return self.position.shape[1]
+
+
+_CONVERTERS: Mapping[tuple[int, int], _PerturberDataConverter] = {}
+_VERIFIERS: Mapping[int, _PerturberDataVerifier] = {}
+_LOADERS: Mapping[int, _PerturberDataLoader] = {}

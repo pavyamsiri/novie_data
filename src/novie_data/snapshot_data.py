@@ -9,6 +9,7 @@ import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
 
+from novie_data._slice_utils import Index1D, index_length_1d
 from novie_data._type_utils import Array1D, verify_array_is_1d
 from novie_data.errors import verify_arrays_have_same_shape
 
@@ -221,6 +222,44 @@ class SnapshotData:
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(a=True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
+        log.info("Successfully saved [cyan]%s[/cyan] frame to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+
+    @classmethod
+    def save_chunk(cls, chunk_slice: Index1D, codes: _Array1D_u32, times: _Array1D_f32, path: Path) -> None:
+        """Serialize frame data to disk.
+
+        Parameters
+        ----------
+        chunk_slice : Index1D
+            The frames to write to.
+        codes : Array1D[u32]
+            The snapshot codes.
+        times : Array1D[f32]
+            The simulation times in Myr.
+        path : Path
+            The path to the data.
+
+        """
+        # Assert that len(codes) == len(times)
+        if len(codes) != len(times):
+            msg = "`codes` and `times` are not the same length!"
+            raise ValueError(msg)
+
+        # Assert that chunk slice represents a chunk of length equal to len(codes) or len(times)
+        num_frames: int = len(codes)
+        num_slice_frames: int = index_length_1d(chunk_slice)
+        if num_frames != num_slice_frames:
+            msg = f"The given number of frames by the arrays ({num_frames}) differs from the slice length ({num_slice_frames})."
+            raise ValueError(msg)
+
+        completeness = np.ones_like(codes, dtype=np.bool_)
+        with Hdf5File(path, "a") as file:
+            _ = cls.verify_data(file)
+            cls.migrate_version(file, cls.VERSION, is_complete=False)
+
+            get_dataset_from_hdf5(file, "codes").write_direct(codes, np.s_[:], chunk_slice)
+            get_dataset_from_hdf5(file, "times").write_direct(times, np.s_[:], chunk_slice)
+            get_dataset_from_hdf5(file, "completeness").write_direct(completeness, np.s_[:], chunk_slice)
         log.info("Successfully saved [cyan]%s[/cyan] frame to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     def dump(self, path: Path) -> None:

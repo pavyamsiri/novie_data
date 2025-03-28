@@ -73,8 +73,8 @@ def test_snapshot_data_deserialization_v1() -> None:
     assert np.all(~t.completeness[1:])
 
 
-def test_snapshot_data_incremental(tmp_path: Path) -> None:
-    """Test incremental serialization.
+def test_snapshot_data_incremental_per_frame(tmp_path: Path) -> None:
+    """Test incremental serialization per frame.
 
     Parameters
     ----------
@@ -84,24 +84,24 @@ def test_snapshot_data_incremental(tmp_path: Path) -> None:
     """
     output_path = tmp_path / "test.hdf5"
 
-    s = SnapshotData.empty(5)
+    s = SnapshotData.empty(10)
     s.dump(output_path)
 
     s = SnapshotData.load(output_path)
     assert s.name == "UNKNOWN"
-    assert s.num_frames == 5
+    assert s.num_frames == 10
     assert np.all(~s.completeness)
 
-    s.save_init("test", output_path)
+    SnapshotData.save_init("test", output_path)
     s = SnapshotData.load(output_path)
     assert s.name == "test"
-    assert s.num_frames == 5
+    assert s.num_frames == 10
     assert np.all(~s.completeness)
 
-    s.save_frame(0, 1, 0.1, output_path)
+    SnapshotData.save_frame(0, 1, 0.1, output_path)
     s = SnapshotData.load(output_path)
     assert s.name == "test"
-    assert s.num_frames == 5
+    assert s.num_frames == 10
     assert s.times[0] == 0.1
     assert s.codes[0] == 1
     assert s.completeness[0]
@@ -110,16 +110,25 @@ def test_snapshot_data_incremental(tmp_path: Path) -> None:
     for i in range(1, 5):
         current_code = i
         current_time = 0.1 * i + 0.1
-        s.save_frame(i, current_code, current_time, output_path)
+        SnapshotData.save_frame(i, current_code, current_time, output_path)
     s = SnapshotData.load(output_path)
     assert s.name == "test"
-    assert s.num_frames == 5
+    assert s.num_frames == 10
     for i in range(1, 5):
         current_code = i
         current_time = 0.1 * i + 0.1
         assert s.codes[i] == current_code
         assert s.times[i] == current_time
         assert s.completeness[i]
+
+    SnapshotData.save_chunk(np.s_[7:9], np.array([3, 5], dtype=np.uint32), np.array([0.344, 0.32], dtype=np.float32), output_path)
+    s = SnapshotData.load(output_path)
+    assert s.name == "test"
+    assert s.num_frames == 10
+    assert s.codes[7] == 3
+    assert s.codes[8] == 5
+    assert s.times[7] == 0.344
+    assert s.times[8] == 0.32
 
 
 def test_snapshot_data_convert_v0_to_v1(tmp_path: Path) -> None:

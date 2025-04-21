@@ -1,92 +1,127 @@
-"""Data to define the solar circle."""
-
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
+import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
+from typing_extensions import override
 
-from novie_data.errors import verify_value_is_positive
-
-from .serde.accessors import get_float_attr_from_hdf5, get_str_attr_from_hdf5
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
+from novie_data_gen import (
+    check_axis_length,
+    get_dataset_from_hdf5,
+    get_file_version,
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
+    get_str_attr_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
+
+    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
+
+
+LATEST_VERSION_V0 = Version("0.1.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
+class _SolarCircleDataLoader(Protocol):
+    def __call__(self, file: Hdf5File) -> SolarCircleData: ...
+
+
 class SolarCircleData:
-    """Data to define the solar circle.
+    DATA_FILE_TYPE: ClassVar[str] = "SolarCircle"
+    VERSION: ClassVar[Version] = LATEST_VERSION_V0
 
-    Attributes
-    ----------
-    solar_radius : float
-        The radius of the solar circle in kpc.
-    omega : float
-        The circular orbital frequency along the circle in radians/Myr.
-    name : str
-        The name of the dataset.
+    def __init__(
+        self,
+        *,
+        name: str = "UNKNOWN",
+        omega: float = 0,
+        solar_radius: float = 8,
+    ) -> None:
+        self.name: str = name
+        self.omega: float = omega
+        self.solar_radius: float = solar_radius
 
-    """
-
-    solar_radius: float
-    omega: float
-    name: str
-
-    DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
-    VERSION: ClassVar[Version] = Version("0.1.0")
-
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        verify_value_is_positive(self.solar_radius, msg=f"Expected solar radius to be positive but got {self.solar_radius} kpc")
-
-    def dump(self, path: Path) -> None:
-        """Serialize data to disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
-        cls = type(self)
-        with Hdf5File(path, "w") as file:
-            # General
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["solar_radius"] = self.solar_radius
-            file.attrs["omega"] = self.omega
-            file.attrs["name"] = self.name
-
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+        equality = True
+        equality &= self.name == other.name
+        equality &= self.omega == other.omega
+        equality &= self.solar_radius == other.solar_radius
+        return bool(equality)
 
     @classmethod
-    def load(cls, path: Path) -> Self:
-        """Deerialize data from disk.
+    def empty(cls) -> Self:
+        return cls()
 
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
+    @staticmethod
+    def load(path: Path) -> SolarCircleData:
+        path = path.expanduser()
+        cls = SolarCircleData
         with Hdf5File(path, "r") as file:
-            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-            verify_file_version_from_hdf5(file, cls.VERSION)
-            name: str = get_str_attr_from_hdf5(file, "name")
-            solar_radius: float = get_float_attr_from_hdf5(file, "solar_radius")
-            omega: float = get_float_attr_from_hdf5(file, "omega")
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
-        return cls(
-            solar_radius=solar_radius,
-            omega=omega,
-            name=name,
-        )
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        return data
+
+    @classmethod
+    def migrate(cls, path: Path) -> None:
+        path = path.expanduser()
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            if file_version == LATEST_VERSION_V0:
+                return
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        data.dump(path)
+
+    def dump(self, path: Path) -> None:
+        path = path.expanduser()
+        cls = type(self)
+        with Hdf5File(path, "w") as file:
+            file.attrs["type"] = cls.DATA_FILE_TYPE
+            file.attrs["version"] = str(cls.VERSION)
+            file.attrs["name"] = self.name
+            file.attrs["omega"] = self.omega
+            file.attrs["solar_radius"] = self.solar_radius
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+
+
+def load_v0(file: Hdf5File) -> SolarCircleData:
+    cls = SolarCircleData
+    name = get_str_attr_from_hdf5(file, "name")
+    omega = get_float_attr_from_hdf5(file, "omega")
+    solar_radius = get_float_attr_from_hdf5(file, "solar_radius")
+
+    return cls(
+        name=name,
+        omega=omega,
+        solar_radius=solar_radius,
+    )
+
+
+_LOADERS: Mapping[int, _SolarCircleDataLoader] = {
+    0: load_v0,
+}

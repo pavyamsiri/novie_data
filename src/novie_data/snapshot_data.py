@@ -131,9 +131,9 @@ class SnapshotData:
         path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["name"] = self.name
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("name", str(self.name))
             _ = file.create_dataset("codes", data=self.codes)
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("times", data=self.times)
@@ -148,7 +148,7 @@ class SnapshotData:
 
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
-            file.attrs["name"] = name
+            file.attrs.modify("name", name)
         log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
     @classmethod

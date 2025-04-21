@@ -139,9 +139,9 @@ class PerturberData:
         path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["name"] = self.name
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("name", str(self.name))
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("mass", data=self.mass)
             _ = file.create_dataset("position", data=self.position)
@@ -157,7 +157,7 @@ class PerturberData:
 
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
-            file.attrs["name"] = name
+            file.attrs.modify("name", name)
         log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
     @classmethod

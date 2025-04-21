@@ -43,6 +43,7 @@ class SolarCircleData:
     DATA_FILE_TYPE: ClassVar[str] = "SolarCircle"
     VERSION: ClassVar[Version] = LATEST_VERSION_V0
 
+
     def __init__(
         self,
         *,
@@ -66,7 +67,8 @@ class SolarCircleData:
 
     @classmethod
     def empty(cls) -> Self:
-        return cls()
+        return cls(
+        )
 
     @staticmethod
     def load(path: Path) -> SolarCircleData:
@@ -101,12 +103,14 @@ class SolarCircleData:
         path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["name"] = self.name
-            file.attrs["omega"] = self.omega
-            file.attrs["solar_radius"] = self.solar_radius
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("name", str(self.name))
+            file.attrs.create("omega", self.omega, dtype=np.float64)
+            file.attrs.create("solar_radius", self.solar_radius, dtype=np.float64)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+
+
 
 
 def load_v0(file: Hdf5File) -> SolarCircleData:
@@ -125,3 +129,5 @@ def load_v0(file: Hdf5File) -> SolarCircleData:
 _LOADERS: Mapping[int, _SolarCircleDataLoader] = {
     0: load_v0,
 }
+
+

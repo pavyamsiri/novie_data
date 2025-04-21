@@ -8,6 +8,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
+__all__ = [
+    "InconsistentArrayLengthError",
+    "UnexpectedArrayLengthError",
+    "check_axis_length",
+]
+
+
 class InconsistentArrayLengthError(ValueError):
     """Validation error for when the given arrays differ in length on specific axes."""
 

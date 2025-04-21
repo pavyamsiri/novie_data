@@ -20,6 +20,7 @@ __all__ = [
     "get_float_attr_from_hdf5",
     "get_int_attr_from_hdf5",
     "get_str_attr_from_hdf5",
+    "get_string_sequence_from_hdf5",
     "read_dataset_from_hdf5_with_dtype",
 ]
 
@@ -189,3 +190,27 @@ def read_dataset_from_hdf5_with_dtype(file: Hdf5File, name: str, *, dtype: type[
 
     value.read_direct(array)
     return require_dtype(array, dtype)
+
+
+def get_string_sequence_from_hdf5(file: Hdf5File, name: str) -> tuple[str, ...]:
+    """Read a dataset from a HDF5 file and return it as a sequence of strings.
+
+    This assumes that the dataset contains an array of strings.
+
+    Parameters
+    ----------
+    file : Hdf5File
+        The HDF5 file to read from.
+    name : str
+        The name of the dataset to read from.
+
+    Returns
+    -------
+    string_sequence : tuple[str, ...]
+        The strings from the given dataset.
+
+    """
+    dset = get_dataset_from_hdf5(file, name)
+    array = np.zeros(dset.shape, dtype=dset.dtype)
+    dset.read_direct(array)
+    return tuple(value.decode("utf-8") for value in array)

@@ -20,9 +20,10 @@ from ._getter import (
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
 )
-from ._verifier import check_axis_length
+from ._verifier import InconsistentArrayLengthError, UnexpectedArrayLengthError, check_axis_length
 
 __all__ = [
     "AnyArray",
@@ -31,6 +32,8 @@ __all__ = [
     "Array3D",
     "Array4D",
     "GenericArray",
+    "InconsistentArrayLengthError",
+    "UnexpectedArrayLengthError",
     "check_axis_length",
     "get_dataset_from_hdf5",
     "get_dataset_metadata",
@@ -38,6 +41,7 @@ __all__ = [
     "get_float_attr_from_hdf5",
     "get_int_attr_from_hdf5",
     "get_str_attr_from_hdf5",
+    "get_string_sequence_from_hdf5",
     "read_dataset_from_hdf5_with_dtype",
     "require_dtype",
     "verify_array_is_1d",

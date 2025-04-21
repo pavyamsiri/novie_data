@@ -1,267 +1,283 @@
-"""The animation data class for radial ridges in Vr and Vphi."""
-
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
+from typing_extensions import override
 
-from novie_data._type_utils import Array3D, verify_array_is_3d
-from novie_data.errors import (
-    verify_arrays_have_correct_length,
-    verify_arrays_have_same_shape,
-    verify_value_is_nonnegative,
-    verify_value_is_positive,
-)
-
-from .serde.accessors import (
+from novie_data_gen import (
+    check_axis_length,
+    get_dataset_from_hdf5,
+    get_file_version,
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
 
-_Array3D_f32: TypeAlias = Array3D[np.float32]
+    _Array3D_f32: TypeAlias = Array3D[np.float32]
+    _Array2D_f32: TypeAlias = Array2D[np.float32]
+    _Array1D_b8: TypeAlias = Array1D[np.bool_]
+    _Array3D_f64: TypeAlias = Array3D[np.float64]
+    _Array2D_f64: TypeAlias = Array2D[np.float64]
+
+LATEST_VERSION_V2 = Version("2.0.0")
+LATEST_VERSION_V3 = Version("3.0.0")
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-class RidgeData:
-    """The surface densities of a snapshot."""
+class _RidgeDataLoader(Protocol):
+    def __call__(self, file: Hdf5File) -> RidgeData: ...
 
+
+class RidgeData:
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
-    VERSION: ClassVar[Version] = Version("2.0.0")
+    VERSION: ClassVar[Version] = LATEST_VERSION_V3
+
 
     def __init__(
         self,
         *,
-        name: str,
-        mass_density: _Array3D_f32,
-        number_density: _Array3D_f32,
-        num_radial_bins: int,
-        num_velocity_bins: int,
-        min_radius: float,
-        max_radius: float,
-        min_velocity: float,
-        max_velocity: float,
+        mass_density: _Array3D_f64,
+        number_density: _Array3D_f64,
+        completeness: _Array1D_b8 | bool = True,
+        max_radius: float = 12,
+        max_velocity: float = 255,
+        min_radius: float = 0,
+        min_velocity: float = -255,
+        name: str = "UNKNOWN",
     ) -> None:
-        """Initialize the data class.
-
-        Parameters
-        ----------
-        name : str
-            The name of the dataset.
-        mass_density : Array3D[f32]
-            The mass density projection in r-Vr phase space.
-        number_density : Array3D[f32]
-            The number density projection in r-Vr phase space.
-        num_radial_bins : int
-            The number of radial bins.
-        num_velocity_bins : int
-            The number of velocity bins.
-        min_radius : float
-            The minimum radius in units of kpc.
-        max_radius : float
-            The maximum radius in units of kpc.
-        min_velocity : float
-            The minimum velocity in units of km/s.
-        max_velocity : float
-            The maximum velocity in units of km/s.
-
-        """
-        self.name: str = name
-        self.mass_density: _Array3D_f32 = mass_density
-        self.number_density: _Array3D_f32 = number_density
+        num_frames = check_axis_length(
+            ((2, mass_density.shape), (2, number_density.shape))
+        )
+        num_radial_bins = check_axis_length(
+            ((1, mass_density.shape), (1, number_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, mass_density.shape), (0, number_density.shape))
+        )
+        match completeness:
+            case True:
+                completeness = np.ones((num_frames,), dtype=np.bool_)
+            case False:
+                completeness = np.zeros((num_frames,), dtype=np.bool_)
+            case _:
+                pass
+        assert completeness is not bool
+        self.num_frames: int = num_frames
         self.num_radial_bins: int = num_radial_bins
         self.num_velocity_bins: int = num_velocity_bins
-        self.min_radius: float = min_radius
         self.max_radius: float = max_radius
-        self.min_velocity: float = min_velocity
         self.max_velocity: float = max_velocity
+        self.min_radius: float = min_radius
+        self.min_velocity: float = min_velocity
+        self.name: str = name
+        self.completeness: _Array1D_b8 = completeness
+        self.mass_density: _Array3D_f64 = mass_density
+        self.number_density: _Array3D_f64 = number_density
 
-        verify_value_is_positive(self.num_radial_bins, msg="Expected the number of radial bins to be positive!")
-        verify_value_is_positive(self.num_velocity_bins, msg="Expected the number of velocity bins to be positive!")
-        verify_value_is_nonnegative(self.min_radius, msg="Expected the minimum radius to be non-negative!")
-        if self.min_radius >= self.max_radius:
-            msg = "Expected the maximum radius to be strictly greater than the minimum radius!"
-            raise ValueError(msg)
-        if self.min_velocity >= self.max_velocity:
-            msg = "Expected the maximum velocity to be strictly greater than the minimum velocity!"
-            raise ValueError(msg)
-
-        verify_arrays_have_same_shape(
-            [self.mass_density, self.number_density],
-            msg="Expected the mass density and number density array to have the same shape!",
-        )
-        verify_arrays_have_correct_length(
-            [(self.mass_density, 0)],
-            self.num_velocity_bins,
-            msg=f"Expected the mass/number density array to have {self.num_velocity_bins} rows.",
-        )
-        verify_arrays_have_correct_length(
-            [(self.mass_density, 1)],
-            self.num_radial_bins,
-            msg=f"Expected the mass/number density array to have {self.num_radial_bins} columns.",
-        )
-
-    def __eq__(self, other: object, /) -> bool:
-        """Compare for equality.
-
-        Parameters
-        ----------
-        other : object
-            The object to compare to.
-
-        Returns
-        -------
-        bool
-            `True` if the other object is equal to this object, `False` otherwise.
-
-        Notes
-        -----
-        Equality means all fields are equal.
-
-        """
+    @override
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, type(self)):
             return False
         equality = True
-        equality &= self.name == other.name
+        equality &= self.num_frames == other.num_frames
         equality &= self.num_radial_bins == other.num_radial_bins
         equality &= self.num_velocity_bins == other.num_velocity_bins
-        equality &= self.min_radius == other.min_radius
         equality &= self.max_radius == other.max_radius
-        equality &= self.min_velocity == other.min_velocity
         equality &= self.max_velocity == other.max_velocity
-        equality &= np.all(self.mass_density == other.mass_density)
-        equality &= np.all(self.number_density == other.number_density)
+        equality &= self.min_radius == other.min_radius
+        equality &= self.min_velocity == other.min_velocity
+        equality &= self.name == other.name
+        equality &= np.array_equal(self.completeness, other.completeness)
+        equality &= np.array_equal(self.mass_density, other.mass_density)
+        equality &= np.array_equal(self.number_density, other.number_density)
         return bool(equality)
 
     @classmethod
-    def load(cls, path: Path) -> Self:
-        """Deserialize phase spiral data from file.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        Returns
-        -------
-        RidgeData
-            The deserialized data.
-
-        """
-        with Hdf5File(path, "r") as file:
-            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-            verify_file_version_from_hdf5(file, cls.VERSION)
-
-            num_radial_bins: int = get_int_attr_from_hdf5(file, "num_radial_bins")
-            num_velocity_bins: int = get_int_attr_from_hdf5(file, "num_velocity_bins")
-            min_radius: float = get_float_attr_from_hdf5(file, "min_radius")
-            max_radius: float = get_float_attr_from_hdf5(file, "max_radius")
-            min_velocity: float = get_float_attr_from_hdf5(file, "min_velocity")
-            max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
-            name: str = get_str_attr_from_hdf5(file, "name")
-
-            # Arrays
-            mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float32))
-            number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float32))
-
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
+    def empty(
+        cls,
+        *,
+        num_frames: int,
+        num_radial_bins: int,
+        num_velocity_bins: int,
+    ) -> Self:
+        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
+        mass_density: _Array3D_f64 = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
+        number_density: _Array3D_f64 = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
         return cls(
+            completeness=completeness,
             mass_density=mass_density,
             number_density=number_density,
-            num_radial_bins=num_radial_bins,
-            num_velocity_bins=num_velocity_bins,
-            min_velocity=min_velocity,
-            max_velocity=max_velocity,
-            min_radius=min_radius,
-            max_radius=max_radius,
-            name=name,
         )
 
+    @staticmethod
+    def load(path: Path) -> RidgeData:
+        path = path.expanduser()
+        cls = RidgeData
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        return data
+
+    @classmethod
+    def migrate(cls, path: Path) -> None:
+        path = path.expanduser()
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            if file_version == LATEST_VERSION_V3:
+                return
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        data.dump(path)
+
     def dump(self, path: Path) -> None:
-        """Serialize phase spiral data to disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
+        path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            # General
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["num_radial_bins"] = self.num_radial_bins
-            file.attrs["num_velocity_bins"] = self.num_velocity_bins
-            file.attrs["min_radius"] = self.min_radius
-            file.attrs["max_radius"] = self.max_radius
-            file.attrs["min_velocity"] = self.min_velocity
-            file.attrs["max_velocity"] = self.max_velocity
-            file.attrs["name"] = self.name
-
-            file.create_dataset("mass_density", data=self.mass_density)
-            file.create_dataset("number_density", data=self.number_density)
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("max_radius", self.max_radius, dtype=np.float64)
+            file.attrs.create("max_velocity", self.max_velocity, dtype=np.float64)
+            file.attrs.create("min_radius", self.min_radius, dtype=np.float64)
+            file.attrs.create("min_velocity", self.min_velocity, dtype=np.float64)
+            file.attrs.create("name", str(self.name))
+            _ = file.create_dataset("completeness", data=self.completeness)
+            _ = file.create_dataset("mass_density", data=self.mass_density)
+            _ = file.create_dataset("number_density", data=self.number_density)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    # Convenience functions
+    @classmethod
+    def save_init(
+        cls,
+        path: Path,
+        *,
+        max_radius: float,
+        max_velocity: float,
+        min_radius: float,
+        min_velocity: float,
+        name: str,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-    @property
-    def num_frames(self) -> int:
-        """int: The number of frames."""
-        return self.mass_density.shape[2]
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            file.attrs.modify("max_radius", max_radius)
+            file.attrs.modify("max_velocity", max_velocity)
+            file.attrs.modify("min_radius", min_radius)
+            file.attrs.modify("min_velocity", min_velocity)
+            file.attrs.modify("name", name)
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-    def get_radial_limits(self) -> tuple[float, float]:
-        """Return the radial limits.
+    @classmethod
+    def save_frame(
+        cls,
+        path: Path,
+        frame: int,
+        *,
+        mass_density: _Array2D_f64,
+        number_density: _Array2D_f64,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-        Returns
-        -------
-        limits : tuple[float, float]
-            The radial limits.
+        num_radial_bins = check_axis_length(
+            ((1, mass_density.shape), (1, number_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, mass_density.shape), (0, number_density.shape))
+        )
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            get_dataset_from_hdf5(file, "completeness").write_direct(
+                np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
+            )
+            get_dataset_from_hdf5(file, "mass_density").write_direct(
+                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+            get_dataset_from_hdf5(file, "number_density").write_direct(
+                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-        """
-        return (self.min_radius, self.max_radius)
 
-    def get_velocity_limits(self) -> tuple[float, float]:
-        """Return the vertical velocity limits.
+def load_v2(file: Hdf5File) -> RidgeData:
+    cls = RidgeData
+    max_radius = get_float_attr_from_hdf5(file, "max_radius")
+    max_velocity = get_float_attr_from_hdf5(file, "max_velocity")
+    min_radius = get_float_attr_from_hdf5(file, "min_radius")
+    min_velocity = get_float_attr_from_hdf5(file, "min_velocity")
+    name = get_str_attr_from_hdf5(file, "name")
+    mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float32))
+    number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float32))
 
-        Returns
-        -------
-        limits : tuple[float, float]
-            The vertical velocity limits.
+    return cls(
+        max_radius=max_radius,
+        max_velocity=max_velocity,
+        min_radius=min_radius,
+        min_velocity=min_velocity,
+        name=name,
+        mass_density=mass_density.astype(np.float64),
+        number_density=number_density.astype(np.float64),
+    )
 
-        """
-        return (self.min_velocity, self.max_velocity)
 
-    def get_2d_limits(self) -> tuple[float, float, float, float]:
-        """Return the 2D limits of the surface density grid.
+def load_v3(file: Hdf5File) -> RidgeData:
+    cls = RidgeData
+    max_radius = get_float_attr_from_hdf5(file, "max_radius")
+    max_velocity = get_float_attr_from_hdf5(file, "max_velocity")
+    min_radius = get_float_attr_from_hdf5(file, "min_radius")
+    min_velocity = get_float_attr_from_hdf5(file, "min_velocity")
+    name = get_str_attr_from_hdf5(file, "name")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float64))
+    number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float64))
 
-        Returns
-        -------
-        limits : tuple[float, float, float, float]
-            The 2D limits.
+    return cls(
+        max_radius=max_radius,
+        max_velocity=max_velocity,
+        min_radius=min_radius,
+        min_velocity=min_velocity,
+        name=name,
+        completeness=completeness,
+        mass_density=mass_density,
+        number_density=number_density,
+    )
 
-        """
-        return (self.min_radius, self.max_radius, self.min_velocity, self.max_velocity)
 
-    def get_dummy_data(self) -> _Array3D_f32:
-        """Return an array of ones with the same shape as the grid.
+_LOADERS: Mapping[int, _RidgeDataLoader] = {
+    2: load_v2,
+    3: load_v3,
+}
 
-        Returns
-        -------
-        _Array3D_f32
-            The array of ones with the same shape as the grid.
 
-        """
-        # NOTE: Transpose to return as row-major with the velocity being on the vertical axis.
-        return np.zeros((self.num_velocity_bins, self.num_radial_bins), dtype=np.float32)

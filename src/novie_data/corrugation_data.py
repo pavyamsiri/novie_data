@@ -1,536 +1,397 @@
-"""The animation data class for side on view projections."""
-
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
+from typing_extensions import override
 
-from novie_data._type_utils import Array1D, Array2D, Array3D, Array4D, verify_array_is_1d, verify_array_is_3d, verify_array_is_4d
-from novie_data.errors import (
-    verify_arrays_have_correct_length,
-    verify_arrays_have_same_shape,
-    verify_value_is_nonnegative,
-    verify_value_is_positive,
-)
-
-from .serde.accessors import (
+from novie_data_gen import (
+    check_axis_length,
+    get_dataset_from_hdf5,
+    get_file_version,
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
-_Array1D_f32: TypeAlias = Array1D[np.float32]
-_Array2D_f32: TypeAlias = Array2D[np.float32]
-_Array3D_f32: TypeAlias = Array3D[np.float32]
-_Array4D_f32: TypeAlias = Array4D[np.float32]
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
+
+    _Array3D_f32: TypeAlias = Array3D[np.float32]
+    _Array2D_f32: TypeAlias = Array2D[np.float32]
+    _Array4D_f32: TypeAlias = Array4D[np.float32]
+    _Array1D_f32: TypeAlias = Array1D[np.float32]
+    _Array1D_b8: TypeAlias = Array1D[np.bool_]
+    _Array3D_f64: TypeAlias = Array3D[np.float64]
+    _Array2D_f64: TypeAlias = Array2D[np.float64]
+    _Array4D_f64: TypeAlias = Array4D[np.float64]
+    _Array1D_f64: TypeAlias = Array1D[np.float64]
+
+LATEST_VERSION_V3 = Version("3.0.0")
+LATEST_VERSION_V4 = Version("4.0.0")
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RadialBinningData:
-    """The binning configuration along the radial axis.
-
-    Attributes
-    ----------
-    num_bins : int
-        The number of radial bins.
-    min_radius : float
-        The minimum radius in kpc.
-    max_radius : float
-        The maximum radius in kpc.
-
-    """
-
-    num_bins: int
-    min_radius: float
-    max_radius: float
-
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
-        verify_value_is_nonnegative(self.min_radius, msg="Expected the minimum radius to be non-negative!")
-        if self.min_radius >= self.max_radius:
-            msg = f"Expected the minimum radius {self.min_radius} kpc to be less than {self.max_radius} kpc."
-            raise ValueError(msg)
-
-    def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize data to file.
-
-        Parameters
-        ----------
-        out_file : Hdf5File
-            The HDF5 file to write to.
-
-        """
-        # General
-        out_file.attrs["num_radial_bins"] = self.num_bins
-        out_file.attrs["min_radius"] = self.min_radius
-        out_file.attrs["max_radius"] = self.max_radius
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            type(self).__name__,
-            Path(out_file.filename).absolute(),
-        )
-
-    @classmethod
-    def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize data from file.
-
-        Parameters
-        ----------
-        in_file : Hdf5File
-            The HDF5 file to read from.
-
-        """
-        num_bins: int = get_int_attr_from_hdf5(in_file, "num_radial_bins")
-        min_radius: float = get_float_attr_from_hdf5(in_file, "min_radius")
-        max_radius: float = get_float_attr_from_hdf5(in_file, "max_radius")
-
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
-        )
-        return cls(
-            num_bins=num_bins,
-            min_radius=min_radius,
-            max_radius=max_radius,
-        )
-
-
-@dataclass
-class HeightBinningData:
-    """The binning configuration along the vertical axis.
-
-    Attributes
-    ----------
-    num_bins : int
-        The number of height bins.
-    max_height : float
-        The maximum absolute height in kpc.
-    cutoff_frequency : float
-        The cutoff frequency of the OLPF in kpc**-1.
-
-    """
-
-    num_bins: int
-    max_height: float
-    cutoff_frequency: float
-
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
-        verify_value_is_positive(self.max_height, msg="Expected the maximum absolute height to be positive!")
-        verify_value_is_nonnegative(self.cutoff_frequency, msg="Expected the cutoff frequency to be non-negative!")
-
-    def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize data to file.
-
-        Parameters
-        ----------
-        out_file : Hdf5File
-            The HDF5 file to write to.
-
-        """
-        # General
-        out_file.attrs["num_height_bins"] = self.num_bins
-        out_file.attrs["max_height"] = self.max_height
-        out_file.attrs["cutoff_frequency"] = self.cutoff_frequency
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            type(self).__name__,
-            Path(out_file.filename).absolute(),
-        )
-
-    @classmethod
-    def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize data from file.
-
-        Parameters
-        ----------
-        in_file : Hdf5File
-            The HDF5 file to read from.
-
-        """
-        num_bins: int = get_int_attr_from_hdf5(in_file, "num_height_bins")
-        max_height: float = get_float_attr_from_hdf5(in_file, "max_height")
-        cutoff_frequency: float = get_float_attr_from_hdf5(in_file, "cutoff_frequency")
-
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
-        )
-        return cls(
-            num_bins=num_bins,
-            max_height=max_height,
-            cutoff_frequency=cutoff_frequency,
-        )
-
-
-@dataclass
-class WedgeData:
-    """The configuration of the wedges around the solar circle.
-
-    Attributes
-    ----------
-    num_wedges : int
-        The number of wedges.
-    inner_radius : float
-        The inner radius of the wedge in kpc.
-    outer_radius : float
-        The outer radius of the wedge in kpc.
-    min_longitude_deg : float
-        The minimum galactic longitude in degrees.
-    max_longitude_deg : float
-        The maximum galactic longitude in degrees.
-
-    Notes
-    -----
-    All values are with respect to the solar frame.
-
-    """
-
-    num_wedges: int
-    inner_radius: float
-    outer_radius: float
-    min_longitude_deg: float
-    max_longitude_deg: float
-
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        verify_value_is_positive(self.num_wedges, msg="Expected the number of wedges to be positive!")
-        verify_value_is_nonnegative(self.inner_radius, msg="Expected the inner radius to be non-negative!")
-        verify_value_is_nonnegative(self.min_longitude_deg, msg="Expected the minimum longitude in degrees to be non-negative!")
-        if self.inner_radius >= self.outer_radius:
-            msg = (
-                f"Expected the inner radius {self.inner_radius} kpc to be smaller than the outer radius {self.outer_radius} kpc."
-            )
-            raise ValueError(msg)
-        if self.min_longitude_deg >= self.max_longitude_deg:
-            msg = f"Expected longitudes to be monontonic increasing but {self.min_longitude_deg} < {self.max_longitude_deg}"
-            raise ValueError(msg)
-        self.width: float = self.outer_radius - self.inner_radius
-        self.longitude_width_deg: float = self.max_longitude_deg - self.min_longitude_deg
-
-    def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize data to file.
-
-        Parameters
-        ----------
-        out_file : Hdf5File
-            The HDF5 file to write to.
-
-        """
-        # General
-        out_file.attrs["num_filters"] = self.num_wedges
-        out_file.attrs["inner_radius"] = self.inner_radius
-        out_file.attrs["outer_radius"] = self.outer_radius
-        out_file.attrs["min_longitude_deg"] = self.min_longitude_deg
-        out_file.attrs["max_longitude_deg"] = self.max_longitude_deg
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            type(self).__name__,
-            Path(out_file.filename).absolute(),
-        )
-
-    @classmethod
-    def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize data from file.
-
-        Parameters
-        ----------
-        in_file : Hdf5File
-            The HDF5 file to read from.
-
-        """
-        num_wedges: int = get_int_attr_from_hdf5(in_file, "num_filters")
-        inner_radius: float = get_float_attr_from_hdf5(in_file, "inner_radius")
-        outer_radius: float = get_float_attr_from_hdf5(in_file, "outer_radius")
-        min_longitude_deg: float = get_float_attr_from_hdf5(in_file, "min_longitude_deg")
-        max_longitude_deg: float = get_float_attr_from_hdf5(in_file, "max_longitude_deg")
-
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
-        )
-        return cls(
-            num_wedges=num_wedges,
-            inner_radius=inner_radius,
-            outer_radius=outer_radius,
-            min_longitude_deg=min_longitude_deg,
-            max_longitude_deg=max_longitude_deg,
-        )
+class _CorrugationDataLoader(Protocol):
+    def __call__(self, file: Hdf5File) -> CorrugationData: ...
 
 
 class CorrugationData:
-    """The side on view of a snapshot."""
-
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
-    VERSION: ClassVar[Version] = Version("3.0.0")
+    VERSION: ClassVar[Version] = LATEST_VERSION_V4
+
 
     def __init__(
         self,
         *,
-        name: str,
-        projection_rz: _Array4D_f32,
-        radii: _Array1D_f32,
-        mean_height: _Array3D_f32,
-        mean_height_error: _Array3D_f32,
-        radial_bins: RadialBinningData,
-        height_bins: HeightBinningData,
-        wedge_data: WedgeData,
-        distance_error: float,
+        mean_height: _Array3D_f64,
+        mean_height_error: _Array3D_f64,
+        projection_rz: _Array4D_f64,
+        radii: _Array1D_f64,
+        completeness: _Array1D_b8 | bool = True,
+        cutoff_frequency: float = 0,
+        distance_error: float = 0,
+        inner_radius: float = 0,
+        max_height: float = 2,
+        max_longitude_deg: float = 245,
+        max_radius: float = 12,
+        min_longitude_deg: float = 225,
+        min_radius: float = 0,
+        name: str = "UNKNOWN",
+        outer_radius: float = 7,
     ) -> None:
-        """Initialize the data class.
-
-        Parameters
-        ----------
-        name : str
-            The name of the dataset.
-        projection_rz : Array4D[f32]
-            The GC radius and GC height phase space projection for each neighbourhood and frame.
-        radii : Array1D[f32]
-            The central radius value for each radial bin in units of kpc.
-        mean_height : Array3D[f32]
-            The mean height for each radial bin in units of kpc.
-        mean_height_error : Array3D[f32]
-            The error in the mean height for each radial bin in units of kpc.
-        radial_bins : RadialBinningData
-            The radial binning data.
-        height_bins : HeightBinningData
-            The height binning data.
-        wedge_data : WedgeData
-            The wedge data.
-        distance_error : float
-            The error in LOS distance as a percentage.
-
-        """
-        self.name: str = name
-        self.projection_rz: _Array4D_f32 = projection_rz
-        self.radii: _Array1D_f32 = radii
-        self.mean_height: _Array3D_f32 = mean_height
-        self.mean_height_error: _Array3D_f32 = mean_height_error
-        self.radial_bins: RadialBinningData = radial_bins
-        self.height_bins: HeightBinningData = height_bins
-        self.wedge_data: WedgeData = wedge_data
+        num_frames = check_axis_length(
+            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+        )
+        num_height_bins = check_axis_length(
+            ((0, projection_rz.shape),)
+        )
+        num_locations = check_axis_length(
+            ((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape))
+        )
+        num_radial_bins = check_axis_length(
+            ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape), (0, radii.shape))
+        )
+        match completeness:
+            case True:
+                completeness = np.ones((num_frames,), dtype=np.bool_)
+            case False:
+                completeness = np.zeros((num_frames,), dtype=np.bool_)
+            case _:
+                pass
+        assert completeness is not bool
+        self.num_frames: int = num_frames
+        self.num_height_bins: int = num_height_bins
+        self.num_locations: int = num_locations
+        self.num_radial_bins: int = num_radial_bins
+        self.cutoff_frequency: float = cutoff_frequency
         self.distance_error: float = distance_error
+        self.inner_radius: float = inner_radius
+        self.max_height: float = max_height
+        self.max_longitude_deg: float = max_longitude_deg
+        self.max_radius: float = max_radius
+        self.min_longitude_deg: float = min_longitude_deg
+        self.min_radius: float = min_radius
+        self.name: str = name
+        self.outer_radius: float = outer_radius
+        self.completeness: _Array1D_b8 = completeness
+        self.mean_height: _Array3D_f64 = mean_height
+        self.mean_height_error: _Array3D_f64 = mean_height_error
+        self.projection_rz: _Array4D_f64 = projection_rz
+        self.radii: _Array1D_f64 = radii
 
-        verify_value_is_nonnegative(self.distance_error, msg="Expected the distance error to be non-negative!")
-
-        # Validate projection
-        verify_arrays_have_same_shape(
-            [self.mean_height, self.mean_height_error], msg="Expected the mean height arrays to have the same shape."
-        )
-        verify_arrays_have_correct_length(
-            [(self.projection_rz, 0)],
-            height_bins.num_bins,
-            msg=f"Expected the projection's 1st axis to have {height_bins.num_bins} cells.",
-        )
-        verify_arrays_have_correct_length(
-            [(self.projection_rz, 1)],
-            radial_bins.num_bins,
-            msg=f"Expected the projection's 2nd axis to have {radial_bins.num_bins} cells.",
-        )
-        verify_arrays_have_correct_length(
-            [(self.radii, 0), (self.mean_height, 0), (self.mean_height_error, 0)],
-            radial_bins.num_bins,
-            msg=f"Expected the mean height arrays and the radii array to have {radial_bins.num_bins} rows.",
-        )
-        verify_arrays_have_correct_length(
-            [(self.projection_rz, 3)],
-            wedge_data.num_wedges,
-            msg=f"Expected the projection's 4th axis to have {wedge_data.num_wedges} cells.",
-        )
-        verify_arrays_have_correct_length(
-            [(self.mean_height, 2), (self.mean_height_error, 2)],
-            wedge_data.num_wedges,
-            msg=f"Expected the mean height array's 3rd axis to have {wedge_data.num_wedges} cells.",
-        )
-
-    def __eq__(self, other: object, /) -> bool:
-        """Compare for equality.
-
-        Parameters
-        ----------
-        other : object
-            The object to compare to.
-
-        Returns
-        -------
-        bool
-            `True` if the other object is equal to this object, `False` otherwise.
-
-        Notes
-        -----
-        Equality means all fields are equal.
-
-        """
+    @override
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, type(self)):
             return False
         equality = True
-        equality &= self.name == other.name
-        equality &= self.radial_bins == other.radial_bins
-        equality &= self.height_bins == other.height_bins
-        equality &= self.wedge_data == other.wedge_data
+        equality &= self.num_frames == other.num_frames
+        equality &= self.num_height_bins == other.num_height_bins
+        equality &= self.num_locations == other.num_locations
+        equality &= self.num_radial_bins == other.num_radial_bins
+        equality &= self.cutoff_frequency == other.cutoff_frequency
         equality &= self.distance_error == other.distance_error
-        equality &= np.all(self.projection_rz == other.projection_rz)
-        equality &= np.all(self.radii == other.radii)
-        equality &= np.all(self.mean_height == other.mean_height)
-        equality &= np.all(self.mean_height_error == other.mean_height_error)
+        equality &= self.inner_radius == other.inner_radius
+        equality &= self.max_height == other.max_height
+        equality &= self.max_longitude_deg == other.max_longitude_deg
+        equality &= self.max_radius == other.max_radius
+        equality &= self.min_longitude_deg == other.min_longitude_deg
+        equality &= self.min_radius == other.min_radius
+        equality &= self.name == other.name
+        equality &= self.outer_radius == other.outer_radius
+        equality &= np.array_equal(self.completeness, other.completeness)
+        equality &= np.array_equal(self.mean_height, other.mean_height)
+        equality &= np.array_equal(self.mean_height_error, other.mean_height_error)
+        equality &= np.array_equal(self.projection_rz, other.projection_rz)
+        equality &= np.array_equal(self.radii, other.radii)
         return bool(equality)
 
     @classmethod
-    def load(cls, path: Path) -> Self:
-        """Deserialize data from disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        Returns
-        -------
-        CorrugationData
-            The deserialized data.
-
-        """
-        with Hdf5File(path, "r") as file:
-            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-            verify_file_version_from_hdf5(file, cls.VERSION)
-
-            name: str = get_str_attr_from_hdf5(file, "name")
-            distance_error: float = get_float_attr_from_hdf5(file, "distance_error")
-
-            # Projections
-            projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32))
-            # Mean height
-            radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32))
-            mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float32))
-            mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32))
-            radial_bins = RadialBinningData.load_from(file)
-            height_bins = HeightBinningData.load_from(file)
-            wedge_data = WedgeData.load_from(file)
-
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
+    def empty(
+        cls,
+        *,
+        num_frames: int,
+        num_height_bins: int,
+        num_locations: int,
+        num_radial_bins: int,
+    ) -> Self:
+        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
+        mean_height: _Array3D_f64 = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        mean_height_error: _Array3D_f64 = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        projection_rz: _Array4D_f64 = np.zeros((num_height_bins, num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        radii: _Array1D_f64 = np.zeros((num_radial_bins,), dtype=np.float64)
         return cls(
-            projection_rz=projection_rz,
-            radii=radii,
+            completeness=completeness,
             mean_height=mean_height,
             mean_height_error=mean_height_error,
-            radial_bins=radial_bins,
-            height_bins=height_bins,
-            wedge_data=wedge_data,
-            distance_error=distance_error,
-            name=name,
+            projection_rz=projection_rz,
+            radii=radii,
         )
+
+    @staticmethod
+    def load(path: Path) -> CorrugationData:
+        path = path.expanduser()
+        cls = CorrugationData
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        return data
+
+    @classmethod
+    def migrate(cls, path: Path) -> None:
+        path = path.expanduser()
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            if file_version == LATEST_VERSION_V4:
+                return
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        data.dump(path)
 
     def dump(self, path: Path) -> None:
-        """Serialize data to disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
+        path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            # General
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["distance_error"] = self.distance_error
-            file.attrs["name"] = self.name
-
-            file.create_dataset("projection_rz", data=self.projection_rz)
-            file.create_dataset("radii", data=self.radii)
-            file.create_dataset("mean_height", data=self.mean_height)
-            file.create_dataset("mean_height_error", data=self.mean_height_error)
-            self.radial_bins.dump_into(file)
-            self.height_bins.dump_into(file)
-            self.wedge_data.dump_into(file)
-
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("cutoff_frequency", self.cutoff_frequency, dtype=np.float64)
+            file.attrs.create("distance_error", self.distance_error, dtype=np.float64)
+            file.attrs.create("inner_radius", self.inner_radius, dtype=np.float64)
+            file.attrs.create("max_height", self.max_height, dtype=np.float64)
+            file.attrs.create("max_longitude_deg", self.max_longitude_deg, dtype=np.float64)
+            file.attrs.create("max_radius", self.max_radius, dtype=np.float64)
+            file.attrs.create("min_longitude_deg", self.min_longitude_deg, dtype=np.float64)
+            file.attrs.create("min_radius", self.min_radius, dtype=np.float64)
+            file.attrs.create("name", str(self.name))
+            file.attrs.create("outer_radius", self.outer_radius, dtype=np.float64)
+            _ = file.create_dataset("completeness", data=self.completeness)
+            _ = file.create_dataset("mean_height", data=self.mean_height)
+            _ = file.create_dataset("mean_height_error", data=self.mean_height_error)
+            _ = file.create_dataset("projection_rz", data=self.projection_rz)
+            _ = file.create_dataset("radii", data=self.radii)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    # Convenience functions
+    @classmethod
+    def save_init(
+        cls,
+        path: Path,
+        *,
+        cutoff_frequency: float,
+        distance_error: float,
+        inner_radius: float,
+        max_height: float,
+        max_longitude_deg: float,
+        max_radius: float,
+        min_longitude_deg: float,
+        min_radius: float,
+        name: str,
+        outer_radius: float,
+        radii: _Array1D_f64,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-    @property
-    def num_frames(self) -> int:
-        """int: The number of frames."""
-        return self.projection_rz.shape[2]
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            file.attrs.modify("cutoff_frequency", cutoff_frequency)
+            file.attrs.modify("distance_error", distance_error)
+            file.attrs.modify("inner_radius", inner_radius)
+            file.attrs.modify("max_height", max_height)
+            file.attrs.modify("max_longitude_deg", max_longitude_deg)
+            file.attrs.modify("max_radius", max_radius)
+            file.attrs.modify("min_longitude_deg", min_longitude_deg)
+            file.attrs.modify("min_radius", min_radius)
+            file.attrs.modify("name", name)
+            file.attrs.modify("outer_radius", outer_radius)
+            get_dataset_from_hdf5(file, "radii").write_direct(
+                np.asarray(radii, dtype=np.float64).reshape(radii.shape), np.s_[:], np.s_[:]
+            )
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-    def get_radial_limits(self) -> tuple[float, float]:
-        """Return the radial limits.
+    @classmethod
+    def save_frame(
+        cls,
+        path: Path,
+        frame: int,
+        *,
+        mean_height: _Array2D_f64,
+        mean_height_error: _Array2D_f64,
+        projection_rz: _Array3D_f64,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-        Returns
-        -------
-        limits : tuple[float, float]
-            The radial limits.
-
-        """
-        return (self.radial_bins.min_radius, self.radial_bins.max_radius)
-
-    def get_height_limits(self) -> tuple[float, float]:
-        """Return the height limits.
-
-        Returns
-        -------
-        limits : tuple[float, float]
-            The height limits.
-
-        """
-        return (-self.height_bins.max_height, self.height_bins.max_height)
-
-    def get_2d_limits(self) -> tuple[float, float, float, float]:
-        """Return the 2D limits of the surface density grid.
-
-        Returns
-        -------
-        limits : tuple[float, float, float, float]
-            The 2D limits.
-
-        """
-        return (
-            self.radial_bins.min_radius,
-            self.radial_bins.max_radius,
-            -self.height_bins.max_height,
-            self.height_bins.max_height,
+        num_height_bins = check_axis_length(
+            ((0, projection_rz.shape),)
         )
+        num_locations = check_axis_length(
+            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+        )
+        num_radial_bins = check_axis_length(
+            ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape))
+        )
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            get_dataset_from_hdf5(file, "completeness").write_direct(
+                np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
+            )
+            get_dataset_from_hdf5(file, "mean_height").write_direct(
+                np.asarray(mean_height, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+            )
+            get_dataset_from_hdf5(file, "mean_height_error").write_direct(
+                np.asarray(mean_height_error, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+            )
+            get_dataset_from_hdf5(file, "projection_rz").write_direct(
+                np.asarray(projection_rz, dtype=np.float64).reshape((num_height_bins, num_radial_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+            )
+        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-    def get_min_density(self) -> float:
-        """Return the minimum (non-zero) density across all projections.
 
-        Returns
-        -------
-        float
-            The minimum density across all projections.
+def load_v3(file: Hdf5File) -> CorrugationData:
+    cls = CorrugationData
+    cutoff_frequency = get_float_attr_from_hdf5(file, "cutoff_frequency")
+    distance_error = get_float_attr_from_hdf5(file, "distance_error")
+    inner_radius = get_float_attr_from_hdf5(file, "inner_radius")
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_longitude_deg = get_float_attr_from_hdf5(file, "max_longitude_deg")
+    max_radius = get_float_attr_from_hdf5(file, "max_radius")
+    min_longitude_deg = get_float_attr_from_hdf5(file, "min_longitude_deg")
+    min_radius = get_float_attr_from_hdf5(file, "min_radius")
+    name = get_str_attr_from_hdf5(file, "name")
+    outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
+    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float32))
+    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32))
+    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32))
+    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32))
+    num_frames = check_axis_length(
+        ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape),)
+    )
+    num_height_bins = check_axis_length(
+        ((0, projection_rz.shape),)
+    )
+    num_locations = check_axis_length(
+        ((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape),)
+    )
+    num_radial_bins = check_axis_length(
+        ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape), (0, radii.shape),)
+    )
 
-        """
-        return float(np.nanmin(self.projection_rz[self.projection_rz > 0]))
+    return cls(
+        cutoff_frequency=cutoff_frequency,
+        distance_error=distance_error,
+        inner_radius=inner_radius,
+        max_height=max_height,
+        max_longitude_deg=max_longitude_deg,
+        max_radius=max_radius,
+        min_longitude_deg=min_longitude_deg,
+        min_radius=min_radius,
+        name=name,
+        outer_radius=outer_radius,
+        mean_height=mean_height.astype(np.float64),
+        mean_height_error=mean_height_error.astype(np.float64),
+        projection_rz=projection_rz.astype(np.float64),
+        radii=radii.astype(np.float64),
+    )
 
-    def get_max_density(self) -> float:
-        """Return the maximum density across all projections.
 
-        Returns
-        -------
-        float
-            The maximum density across all projections.
+def load_v4(file: Hdf5File) -> CorrugationData:
+    cls = CorrugationData
+    cutoff_frequency = get_float_attr_from_hdf5(file, "cutoff_frequency")
+    distance_error = get_float_attr_from_hdf5(file, "distance_error")
+    inner_radius = get_float_attr_from_hdf5(file, "inner_radius")
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_longitude_deg = get_float_attr_from_hdf5(file, "max_longitude_deg")
+    max_radius = get_float_attr_from_hdf5(file, "max_radius")
+    min_longitude_deg = get_float_attr_from_hdf5(file, "min_longitude_deg")
+    min_radius = get_float_attr_from_hdf5(file, "min_radius")
+    name = get_str_attr_from_hdf5(file, "name")
+    outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64))
+    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64))
+    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64))
+    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+    num_frames = check_axis_length(
+        ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape),)
+    )
+    num_height_bins = check_axis_length(
+        ((0, projection_rz.shape),)
+    )
+    num_locations = check_axis_length(
+        ((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape),)
+    )
+    num_radial_bins = check_axis_length(
+        ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape), (0, radii.shape),)
+    )
 
-        """
-        return float(np.nanmax(self.projection_rz[self.projection_rz > 0]))
+    return cls(
+        cutoff_frequency=cutoff_frequency,
+        distance_error=distance_error,
+        inner_radius=inner_radius,
+        max_height=max_height,
+        max_longitude_deg=max_longitude_deg,
+        max_radius=max_radius,
+        min_longitude_deg=min_longitude_deg,
+        min_radius=min_radius,
+        name=name,
+        outer_radius=outer_radius,
+        completeness=completeness,
+        mean_height=mean_height,
+        mean_height_error=mean_height_error,
+        projection_rz=projection_rz,
+        radii=radii,
+    )
 
-    def get_dummy_data(self) -> _Array2D_f32:
-        """Return an array of ones with the same shape as the grid.
 
-        Returns
-        -------
-        Array2D[f32]
-            The array of ones with the same shape as the grid.
+_LOADERS: Mapping[int, _CorrugationDataLoader] = {
+    3: load_v3,
+    4: load_v4,
+}
 
-        """
-        # NOTE: Transpose to return as row-major, with the height being on the vertical axis.
-        return np.ones((self.height_bins.num_bins, self.radial_bins.num_bins), dtype=np.float32)
+

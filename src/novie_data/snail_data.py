@@ -1,435 +1,319 @@
-"""The animation data class for phase spirals or "snail shells"."""
-
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, ClassVar, Self, TypeAlias, assert_never
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
-from scipy.ndimage import gaussian_filter
+from typing_extensions import override
 
-from novie_data._type_utils import Array2D, Array4D, verify_array_is_4d
-from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
-
-from .neighbourhood_data import SphericalNeighbourhoodData
-from .serde.accessors import (
+from novie_data_gen import (
+    check_axis_length,
+    get_dataset_from_hdf5,
+    get_file_version,
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
+    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
 
-_Array2D_f32: TypeAlias = Array2D[np.float32]
-_Array4D_f32: TypeAlias = Array4D[np.float32]
+    _Array4D_f32: TypeAlias = Array4D[np.float32]
+    _Array3D_f32: TypeAlias = Array3D[np.float32]
+    _Array4D_f64: TypeAlias = Array4D[np.float64]
+    _Array3D_f64: TypeAlias = Array3D[np.float64]
+    _Array1D_b8: TypeAlias = Array1D[np.bool_]
+
+LATEST_VERSION_V4 = Version("4.0.0")
+LATEST_VERSION_V5 = Version("5.0.0")
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-class SnailPlotColoring(Enum):
-    """The phase spiral coloring.
-
-    Variants
-    --------
-    DENSITY
-        The number density.
-    OVERDENSITY
-        The overdensity.
-    AZIMUTHAL_VELOCITY
-        The mean azimuthal velocity.
-    RADIAL_VELOCITY
-        The mean radial velocity.
-
-    """
-
-    DENSITY = "density"
-    OVERDENSITY = "overdensity"
-    AZIMUTHAL_VELOCITY = "vphi"
-    RADIAL_VELOCITY = "vr"
-
-    def __str__(self) -> str:
-        """Return the string representation.
-
-        Returns
-        -------
-        str
-            The string representation.
-
-        """
-        return self.value
-
-    def get_label(self) -> str:
-        """Return the label for the coloring in matplotlib Mathtext.
-
-        Returns
-        -------
-        str
-            The label.
-
-        """
-        match self:
-            # Surface density
-            case SnailPlotColoring.DENSITY:
-                return r"$\rho$"
-            # Overdensity
-            case SnailPlotColoring.OVERDENSITY:
-                return r"$\delta \rho$"
-            # Azimuthal velocity
-            case SnailPlotColoring.AZIMUTHAL_VELOCITY:
-                return r"$ \langle v_{\phi} \rangle \;(\mathrm{km} \, \mathrm{s}^{-1})$"
-            # Radial velocity
-            case SnailPlotColoring.RADIAL_VELOCITY:
-                return r"$ \langle v_{R} \rangle \;(\mathrm{km} \, \mathrm{s}^{-1})$"
-            case _:
-                assert_never(self)
-
-    @staticmethod
-    def from_str(value: str) -> SnailPlotColoring | None:
-        """Parse a string into a `SnailPlotColoring`.
-
-        Parameters
-        ----------
-        value : str
-            The string to parse.
-
-        Returns
-        -------
-        SnailPlotColoring | None
-            The parsed coloring or `None` if the string was not valid.
-
-        """
-        match value:
-            case "density":
-                return SnailPlotColoring.DENSITY
-            case "vphi":
-                return SnailPlotColoring.AZIMUTHAL_VELOCITY
-            case "vr":
-                return SnailPlotColoring.RADIAL_VELOCITY
-            case _:
-                return None
+class _SnailDataLoader(Protocol):
+    def __call__(self, file: Hdf5File) -> SnailData: ...
 
 
-@dataclass
 class SnailData:
-    """The snail data of a snapshot."""
-
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
-    VERSION: ClassVar[Version] = Version("4.0.0")
+    VERSION: ClassVar[Version] = LATEST_VERSION_V5
+
 
     def __init__(
         self,
         *,
-        name: str,
-        surface_density: _Array4D_f32,
-        azimuthal_velocity: _Array4D_f32,
-        radial_velocity: _Array4D_f32,
-        neighbourhood_data: SphericalNeighbourhoodData,
-        num_height_bins: int,
-        num_velocity_bins: int,
-        max_height: float,
-        max_velocity: float,
+        azimuthal_velocity: _Array4D_f64,
+        radial_velocity: _Array4D_f64,
+        surface_density: _Array4D_f64,
+        completeness: _Array1D_b8 | bool = True,
+        max_height: float = 1,
+        max_velocity: float = 60,
+        name: str = "UNKNOWN",
+        sphere_radius: float = 2,
     ) -> None:
-        """Initialize the data class.
-
-        Parameters
-        ----------
-        name : str
-            The name of the dataset.
-        surface_density : Array4D[f32]
-            The surface density for each neighbourhood and frame.
-        azimuthal_velocity : Array4D[f32]
-            The azimuthal velocity for each neighbourhood and frame.
-        radial_velocity : Array4D[f32]
-            The radial velocity for each neighbourhood and frame.
-        neighbourhood_data : SphericalNeighbourhoodData
-            The neighbourhood data.
-        num_height_bins : int
-            The number of height bins.
-        num_velocity_bins : int
-            The number of velocity bins.
-        max_height : float
-            The maximum absolute height in units of kpc.
-        max_velocity : float
-            The maximum absolute velocity in units of km/s.
-
-        """
-        self.name: str = name
-        self.surface_density: _Array4D_f32 = surface_density
-        self.azimuthal_velocity: _Array4D_f32 = azimuthal_velocity
-        self.radial_velocity: _Array4D_f32 = radial_velocity
-        self.neighbourhood_data: SphericalNeighbourhoodData = neighbourhood_data
+        num_frames = check_axis_length(
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
+        )
+        num_height_bins = check_axis_length(
+            ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
+        )
+        num_locations = check_axis_length(
+            ((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
+        )
+        match completeness:
+            case True:
+                completeness = np.ones((num_frames,), dtype=np.bool_)
+            case False:
+                completeness = np.zeros((num_frames,), dtype=np.bool_)
+            case _:
+                pass
+        assert completeness is not bool
+        self.num_frames: int = num_frames
         self.num_height_bins: int = num_height_bins
+        self.num_locations: int = num_locations
         self.num_velocity_bins: int = num_velocity_bins
         self.max_height: float = max_height
         self.max_velocity: float = max_velocity
+        self.name: str = name
+        self.sphere_radius: float = sphere_radius
+        self.azimuthal_velocity: _Array4D_f64 = azimuthal_velocity
+        self.completeness: _Array1D_b8 = completeness
+        self.radial_velocity: _Array4D_f64 = radial_velocity
+        self.surface_density: _Array4D_f64 = surface_density
 
-        # Verify values
-        verify_value_is_positive(self.num_height_bins, msg="Expected the number of height bins to be positive!")
-        verify_value_is_positive(self.num_velocity_bins, msg="Expected the number of velocity bins to be positive!")
-        verify_value_is_positive(self.max_height, msg="Expected the maximum absolute height to be positive!")
-        verify_value_is_positive(self.max_velocity, msg="Expected the of velocity bins to be positive!")
-
-        # Validate shapes
-        verify_arrays_have_same_shape(
-            [self.surface_density, self.azimuthal_velocity, self.radial_velocity],
-            msg="Expected projections to have the same shape!",
-        )
-        verify_arrays_have_correct_length(
-            [(self.surface_density, 0)],
-            num_velocity_bins,
-            msg=f"Expected the projections to have {num_velocity_bins} rows (number of velocity bins).",
-        )
-        verify_arrays_have_correct_length(
-            [(self.surface_density, 1)],
-            num_height_bins,
-            msg=f"Expected the projections to have {num_height_bins} columns (number of velocity bins).",
-        )
-        verify_arrays_have_correct_length(
-            [(self.surface_density, 3)],
-            neighbourhood_data.num_spheres,
-            msg=f"Expected the projections to have {neighbourhood_data.num_spheres} axis 3 (number of neighbourhoods).",
-        )
-
-    def __eq__(self, other: object, /) -> bool:
-        """Compare for equality.
-
-        Parameters
-        ----------
-        other : object
-            The object to compare to.
-
-        Returns
-        -------
-        bool
-            `True` if the other object is equal to this object, `False` otherwise.
-
-        Notes
-        -----
-        Equality means all fields are equal.
-
-        """
+    @override
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, type(self)):
             return False
         equality = True
-        equality &= self.name == other.name
-        equality &= self.neighbourhood_data == other.neighbourhood_data
-        equality &= np.all(self.surface_density == other.surface_density)
-        equality &= np.all(self.azimuthal_velocity == other.azimuthal_velocity)
-        equality &= np.all(self.radial_velocity == other.radial_velocity)
+        equality &= self.num_frames == other.num_frames
         equality &= self.num_height_bins == other.num_height_bins
+        equality &= self.num_locations == other.num_locations
         equality &= self.num_velocity_bins == other.num_velocity_bins
         equality &= self.max_height == other.max_height
         equality &= self.max_velocity == other.max_velocity
+        equality &= self.name == other.name
+        equality &= self.sphere_radius == other.sphere_radius
+        equality &= np.array_equal(self.azimuthal_velocity, other.azimuthal_velocity)
+        equality &= np.array_equal(self.completeness, other.completeness)
+        equality &= np.array_equal(self.radial_velocity, other.radial_velocity)
+        equality &= np.array_equal(self.surface_density, other.surface_density)
         return bool(equality)
 
     @classmethod
-    def load(cls, path: Path) -> Self:
-        """Deserialize phase spiral data from file.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        Returns
-        -------
-        SnailData
-            The deserialized data.
-
-        """
-        with Hdf5File(path, "r") as file:
-            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-            verify_file_version_from_hdf5(file, cls.VERSION)
-
-            num_height_bins: int = get_int_attr_from_hdf5(file, "num_height_bins")
-            num_velocity_bins: int = get_int_attr_from_hdf5(file, "num_velocity_bins")
-            max_height: float = get_float_attr_from_hdf5(file, "max_height")
-            max_velocity: float = get_float_attr_from_hdf5(file, "max_velocity")
-            name: str = get_str_attr_from_hdf5(file, "name")
-
-            # Arrays
-            surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float32))
-            azimuthal_velocity = verify_array_is_4d(
-                read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float32)
-            )
-            radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float32))
-
-            neighbourhood_data = SphericalNeighbourhoodData.load_from(file)
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
+    def empty(
+        cls,
+        *,
+        num_frames: int,
+        num_height_bins: int,
+        num_locations: int,
+        num_velocity_bins: int,
+    ) -> Self:
+        azimuthal_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
+        radial_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        surface_density: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
         return cls(
-            surface_density=surface_density,
             azimuthal_velocity=azimuthal_velocity,
+            completeness=completeness,
             radial_velocity=radial_velocity,
-            num_height_bins=num_height_bins,
-            num_velocity_bins=num_velocity_bins,
-            max_height=max_height,
-            max_velocity=max_velocity,
-            neighbourhood_data=neighbourhood_data,
-            name=name,
+            surface_density=surface_density,
         )
+
+    @staticmethod
+    def load(path: Path) -> SnailData:
+        path = path.expanduser()
+        cls = SnailData
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        return data
+
+    @classmethod
+    def migrate(cls, path: Path) -> None:
+        path = path.expanduser()
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            if file_version == LATEST_VERSION_V5:
+                return
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        data.dump(path)
 
     def dump(self, path: Path) -> None:
-        """Serialize phase spiral data to disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
+        path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            # General
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["num_height_bins"] = self.num_height_bins
-            file.attrs["num_velocity_bins"] = self.num_velocity_bins
-            file.attrs["max_height"] = self.max_height
-            file.attrs["max_velocity"] = self.max_velocity
-            file.attrs["name"] = self.name
-
-            file.create_dataset("surface_density", data=self.surface_density)
-            file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)
-            file.create_dataset("radial_velocity", data=self.radial_velocity)
-            self.neighbourhood_data.dump_into(file)
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("max_height", self.max_height, dtype=np.float64)
+            file.attrs.create("max_velocity", self.max_velocity, dtype=np.float64)
+            file.attrs.create("name", str(self.name))
+            file.attrs.create("sphere_radius", self.sphere_radius, dtype=np.float64)
+            _ = file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)
+            _ = file.create_dataset("completeness", data=self.completeness)
+            _ = file.create_dataset("radial_velocity", data=self.radial_velocity)
+            _ = file.create_dataset("surface_density", data=self.surface_density)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    # Convenience functions
+    @classmethod
+    def save_init(
+        cls,
+        path: Path,
+        *,
+        max_height: float,
+        max_velocity: float,
+        name: str,
+        sphere_radius: float,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-    @property
-    def num_frames(self) -> int:
-        """int: The number of frames."""
-        return self.surface_density.shape[2]
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            file.attrs.modify("max_height", max_height)
+            file.attrs.modify("max_velocity", max_velocity)
+            file.attrs.modify("name", name)
+            file.attrs.modify("sphere_radius", sphere_radius)
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-    def get_height_limits(self) -> tuple[float, float]:
-        """Return the height limits.
+    @classmethod
+    def save_frame(
+        cls,
+        path: Path,
+        frame: int,
+        *,
+        azimuthal_velocity: _Array3D_f64,
+        radial_velocity: _Array3D_f64,
+        surface_density: _Array3D_f64,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-        Returns
-        -------
-        limits : tuple[float, float]
-            The height limits.
-
-        """
-        return (-self.max_height, self.max_height)
-
-    def get_velocity_limits(self) -> tuple[float, float]:
-        """Return the vertical velocity limits.
-
-        Returns
-        -------
-        limits : tuple[float, float]
-            The vertical velocity limits.
-
-        """
-        return (-self.max_velocity, self.max_velocity)
-
-    def get_2d_limits(self) -> tuple[float, float, float, float]:
-        """Return the 2D limits of the surface density grid.
-
-        Returns
-        -------
-        limits : tuple[float, float, float, float]
-            The 2D limits.
-
-        """
-        return (-self.max_height, self.max_height, -self.max_velocity, self.max_velocity)
-
-    def get_min_value(self, coloring: SnailPlotColoring) -> float:
-        """Return the minimum (non-zero) density across all projections.
-
-        Parameters
-        ----------
-        coloring : SnailPlotColoring
-            The coloring.
-
-        Returns
-        -------
-        float
-            The minimum density across all projections.
-
-        """
-        match coloring:
-            case SnailPlotColoring.DENSITY:
-                array = self.surface_density
-            case SnailPlotColoring.OVERDENSITY:
-                array = self.overdensity
-            case SnailPlotColoring.AZIMUTHAL_VELOCITY:
-                array = self.azimuthal_velocity
-            case SnailPlotColoring.RADIAL_VELOCITY:
-                array = self.radial_velocity
-            case _:
-                assert_never(coloring)
-        return float(np.nanmin(array[array != 0]))
-
-    def get_max_value(self, coloring: SnailPlotColoring) -> float:
-        """Return the maximum density across all projections.
-
-        Parameters
-        ----------
-        coloring : SnailPlotColoring
-            The coloring.
-
-        Returns
-        -------
-        float
-            The maximum density across all projections.
-
-        """
-        match coloring:
-            case SnailPlotColoring.DENSITY:
-                array = self.surface_density
-            case SnailPlotColoring.OVERDENSITY:
-                array = self.overdensity
-            case SnailPlotColoring.AZIMUTHAL_VELOCITY:
-                array = self.azimuthal_velocity
-            case SnailPlotColoring.RADIAL_VELOCITY:
-                array = self.radial_velocity
-            case _:
-                assert_never(coloring)
-        return float(np.nanmax(array[array != 0]))
-
-    @property
-    def overdensity(self) -> _Array4D_f32:
-        """_Array4D_f32: The overdensity map blurred using a width of 4 bins."""
-        return self.get_overdensity(4)
-
-    def get_overdensity(self, blur_width: float) -> _Array4D_f32:
-        """Return the overdensity map given a blurring width in units of bins.
-
-        Parameters
-        ----------
-        blur_width : float
-            The blur width for both axes in number of bins.
-
-        Returns
-        -------
-        overdensity : _Array4D_f32
-            The overdensity.
-
-        """
-        mean_density: _Array4D_f32 = gaussian_filter(self.surface_density, sigma=(blur_width, blur_width), axes=(0, 1)).astype(
-            np.float32
+        num_height_bins = check_axis_length(
+            ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
         )
-        norm_density = np.copy(self.surface_density)
-        norm_density[norm_density != 0] /= mean_density[norm_density != 0]
-        return (norm_density - 1).astype(np.float32)
+        num_locations = check_axis_length(
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
+        )
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            get_dataset_from_hdf5(file, "azimuthal_velocity").write_direct(
+                np.asarray(azimuthal_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+            )
+            get_dataset_from_hdf5(file, "completeness").write_direct(
+                np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
+            )
+            get_dataset_from_hdf5(file, "radial_velocity").write_direct(
+                np.asarray(radial_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+            )
+            get_dataset_from_hdf5(file, "surface_density").write_direct(
+                np.asarray(surface_density, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+            )
+        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-    def get_dummy_data(self) -> _Array2D_f32:
-        """Return an array of ones with the same shape as the grid.
 
-        Returns
-        -------
-        _Array2D_f32
-            The array of ones with the same shape as the grid.
+def load_v4(file: Hdf5File) -> SnailData:
+    cls = SnailData
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_velocity = get_float_attr_from_hdf5(file, "max_velocity")
+    name = get_str_attr_from_hdf5(file, "name")
+    sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
+    azimuthal_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float32))
+    radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float32))
+    surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float32))
+    num_frames = check_axis_length(
+        ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape),)
+    )
+    num_height_bins = check_axis_length(
+        ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape),)
+    )
+    num_locations = check_axis_length(
+        ((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape),)
+    )
+    num_velocity_bins = check_axis_length(
+        ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape),)
+    )
 
-        """
-        # NOTE: Transpose to return as row-major with the velocity being on the vertical axis.
-        return np.zeros((self.num_height_bins, self.num_velocity_bins), dtype=np.float32).T
+    return cls(
+        max_height=max_height,
+        max_velocity=max_velocity,
+        name=name,
+        sphere_radius=sphere_radius,
+        azimuthal_velocity=azimuthal_velocity.astype(np.float64),
+        radial_velocity=radial_velocity.astype(np.float64),
+        surface_density=surface_density.astype(np.float64),
+    )
+
+
+def load_v5(file: Hdf5File) -> SnailData:
+    cls = SnailData
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_velocity = get_float_attr_from_hdf5(file, "max_velocity")
+    name = get_str_attr_from_hdf5(file, "name")
+    sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
+    azimuthal_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float64))
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float64))
+    surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float64))
+    num_frames = check_axis_length(
+        ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape),)
+    )
+    num_height_bins = check_axis_length(
+        ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape),)
+    )
+    num_locations = check_axis_length(
+        ((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape),)
+    )
+    num_velocity_bins = check_axis_length(
+        ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape),)
+    )
+
+    return cls(
+        max_height=max_height,
+        max_velocity=max_velocity,
+        name=name,
+        sphere_radius=sphere_radius,
+        azimuthal_velocity=azimuthal_velocity,
+        completeness=completeness,
+        radial_velocity=radial_velocity,
+        surface_density=surface_density,
+    )
+
+
+_LOADERS: Mapping[int, _SnailDataLoader] = {
+    4: load_v4,
+    5: load_v5,
+}
+
+

@@ -18,9 +18,9 @@ def test_wrinkle_residuals_data_init() -> None:
     num_radial_bins: int = 123
     num_frames: int = 7
     num_neighbourhoods: int = 87
-    angular_momentum = np.zeros(num_radial_bins, dtype=np.float32)
-    residuals = np.zeros((num_radial_bins, num_frames, num_neighbourhoods), dtype=np.float32)
-    sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
+    angular_momentum = np.zeros(num_radial_bins, dtype=np.float64)
+    residuals = np.zeros((num_radial_bins, num_frames, num_neighbourhoods), dtype=np.float64)
+    sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float64)
     s = WrinkleResidualsData(
         name="test",
         metric_name="sse",
@@ -44,9 +44,9 @@ def test_wrinkle_residuals_data_serde(tmp_path: Path) -> None:
     num_radial_bins: int = 123
     num_frames: int = 7
     num_neighbourhoods: int = 87
-    angular_momentum = np.zeros(num_radial_bins, dtype=np.float32)
-    residuals = np.zeros((num_radial_bins, num_frames, num_neighbourhoods), dtype=np.float32)
-    sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float32)
+    angular_momentum = np.zeros(num_radial_bins, dtype=np.float64)
+    residuals = np.zeros((num_radial_bins, num_frames, num_neighbourhoods), dtype=np.float64)
+    sse = np.zeros((num_frames, num_neighbourhoods), dtype=np.float64)
     s = WrinkleResidualsData(
         name="test",
         metric_name="sse",

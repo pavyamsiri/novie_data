@@ -10,24 +10,24 @@ from .ridge_data import RidgeData
 from .snail_data import SnailData
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
-from .surface_density_data import SurfaceDensityData
+from .surface_density_data import GridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 
 __all__ = [
-    "SurfaceDensityData",
     "CorrugationData",
-    "SnailData",
     "CorrugationResidualsData",
+    "GridData",
+    "NovieData",
+    "PerturberData",
+    "RidgeData",
+    "SnailData",
     "SnapshotData",
     "SolarCircleData",
+    "SphericalNeighbourhoodData",
     "SpiralArmCoverageData",
     "WrinkleData",
     "WrinkleResidualsData",
-    "SphericalNeighbourhoodData",
-    "PerturberData",
-    "RidgeData",
-    "NovieData",
 ]
 
 __version__: str = "3.0.0"

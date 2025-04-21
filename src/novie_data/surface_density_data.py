@@ -1,380 +1,298 @@
-"""The animation data class for surface density projections in Cartesian space."""
-
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from pathlib import Path
-from typing import ClassVar, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
 from packaging.version import Version
+from typing_extensions import override
 
-from novie_data._type_utils import Array2D, Array3D, verify_array_is_3d
-from novie_data.errors import verify_arrays_have_correct_length, verify_arrays_have_same_shape, verify_value_is_positive
-
-from .serde.accessors import (
+from novie_data_gen import (
+    check_axis_length,
+    get_dataset_from_hdf5,
+    get_file_version,
     get_float_attr_from_hdf5,
     get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from .serde.verification import verify_file_type_from_hdf5, verify_file_version_from_hdf5
 
-_Array2D_f32: TypeAlias = Array2D[np.float32]
-_Array3D_f32: TypeAlias = Array3D[np.float32]
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
+
+    _Array3D_f32: TypeAlias = Array3D[np.float32]
+    _Array2D_f32: TypeAlias = Array2D[np.float32]
+    _Array1D_b8: TypeAlias = Array1D[np.bool_]
+    _Array3D_f64: TypeAlias = Array3D[np.float64]
+    _Array2D_f64: TypeAlias = Array2D[np.float64]
+
+LATEST_VERSION_V3 = Version("3.0.0")
+LATEST_VERSION_V4 = Version("4.0.0")
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ExponentialDiscProfileData:
-    """The exponential profile of a galactic disc.
-
-    The profile is of the form Sigma = A*exp(-R/Rs).
-
-    Attributes
-    ----------
-    scale_mass : float
-        The scale mass of the disc in Msol.
-    scale_length : float
-        The scale length of the disc in kpc.
-
-    """
-
-    scale_mass: float
-    scale_length: float
-
-    def __post_init__(self) -> None:
-        """Perform post-initialisation verification."""
-        verify_value_is_positive(self.scale_mass, msg="Expected the scale mass to be positive!")
-        verify_value_is_positive(self.scale_length, msg="Expected the scale length to be positive!")
-
-    def dump_into(self, out_file: Hdf5File) -> None:
-        """Deserialize exponential disc parameters to file.
-
-        Parameters
-        ----------
-        out_file : Hdf5File
-            The HDF5 file to write to.
-
-        """
-        # General
-        out_file.attrs["disc_scale_mass"] = self.scale_mass
-        out_file.attrs["disc_scale_length"] = self.scale_length
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            type(self).__name__,
-            Path(out_file.filename).absolute(),
-        )
-
-    @classmethod
-    def load_from(cls, in_file: Hdf5File) -> Self:
-        """Serialize exponential disc parameters from file.
-
-        Parameters
-        ----------
-        in_file : Hdf5File
-            The HDF5 file to read from.
-
-        """
-        scale_mass: float = get_float_attr_from_hdf5(in_file, "disc_scale_mass")
-        scale_length: float = get_float_attr_from_hdf5(in_file, "disc_scale_length")
-
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, Path(in_file.filename).absolute()
-        )
-        return cls(
-            scale_mass=scale_mass,
-            scale_length=scale_length,
-        )
+class _GridDataLoader(Protocol):
+    def __call__(self, file: Hdf5File) -> GridData: ...
 
 
-class SurfaceDensityData:
-    """The surface densities of a snapshot in all three cardinal projections.
-
-    Attributes
-    ----------
-    name : str
-        The name of the dataset.
-    projection_xy : Array3D[f32]
-        The surface density in the xy projection.
-    projection_xz : Array3D[f32]
-        The surface density in the xz projection.
-    projection_yz : Array3D[f32]
-        The surface density in the yz projection.
-    flat_projection_xy : Array3D[f32]
-        The flattened surface density in the xy projection.
-    extent : float
-        The half-width of all axes.
-    num_bins : int
-        The number of bins of all axes.
-    disc_profile : ExponentialDiscProfileData
-        The parameters determining exponential profile of the disc.
-
-    Notes
-    -----
-    All projections are 3D arrays of floats with the shape `(num_bins, num_bins, num_frames)`.
-
-    """
-
+class GridData:
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
-    VERSION: ClassVar[Version] = Version("3.0.0")
+    VERSION: ClassVar[Version] = LATEST_VERSION_V4
+
 
     def __init__(
         self,
         *,
-        name: str,
-        projection_xy: _Array3D_f32,
-        projection_xz: _Array3D_f32,
-        projection_yz: _Array3D_f32,
-        flat_projection_xy: _Array3D_f32,
-        extent: float,
-        num_bins: int,
-        disc_profile: ExponentialDiscProfileData,
+        flat_projection_xy: _Array3D_f64,
+        projection_xy: _Array3D_f64,
+        projection_xz: _Array3D_f64,
+        projection_yz: _Array3D_f64,
+        completeness: _Array1D_b8 | bool = True,
+        disc_scale_length: float = 1,
+        disc_scale_mass: float = 1,
+        extent: float = 1,
+        name: str = "UNKNOWN",
     ) -> None:
-        """Initialize the data class.
-
-        Parameters
-        ----------
-        name : str
-            The name of the dataset.
-        projection_xy : Array3D[f32]
-            The surface density in the xy projection.
-        projection_xz : Array3D[f32]
-            The surface density in the xz projection.
-        projection_yz : Array3D[f32]
-            The surface density in the yz projection.
-        flat_projection_xy : Array3D[f32]
-            The flattened surface density in the xy projection.
-        extent : float
-            The half-width of all axes.
-        num_bins : int
-            The number of bins of all axes.
-        disc_profile : ExponentialDiscProfileData
-            The parameters determining exponential profile of the disc.
-
-        Notes
-        -----
-        All projections are 3D arrays of floats with the shape `(num_bins, num_bins, num_frames)`.
-
-        """
-        self.name: str = name
-        self.projection_xy: _Array3D_f32 = projection_xy
-        self.projection_xz: _Array3D_f32 = projection_xz
-        self.projection_yz: _Array3D_f32 = projection_yz
-        self.flat_projection_xy: _Array3D_f32 = flat_projection_xy
-        self.extent: float = extent
+        num_bins = check_axis_length(
+            ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape))
+        )
+        num_frames = check_axis_length(
+            ((2, flat_projection_xy.shape), (2, projection_xy.shape), (2, projection_xz.shape), (2, projection_yz.shape))
+        )
+        match completeness:
+            case True:
+                completeness = np.ones((num_frames,), dtype=np.bool_)
+            case False:
+                completeness = np.zeros((num_frames,), dtype=np.bool_)
+            case _:
+                pass
+        assert completeness is not bool
         self.num_bins: int = num_bins
-        self.disc_profile: ExponentialDiscProfileData = disc_profile
+        self.num_frames: int = num_frames
+        self.disc_scale_length: float = disc_scale_length
+        self.disc_scale_mass: float = disc_scale_mass
+        self.extent: float = extent
+        self.name: str = name
+        self.completeness: _Array1D_b8 = completeness
+        self.flat_projection_xy: _Array3D_f64 = flat_projection_xy
+        self.projection_xy: _Array3D_f64 = projection_xy
+        self.projection_xz: _Array3D_f64 = projection_xz
+        self.projection_yz: _Array3D_f64 = projection_yz
 
-        # Verify values
-        verify_value_is_positive(self.extent, msg="Expected the extent to be positive!")
-        verify_value_is_positive(self.num_bins, msg="Expected the number of bins to be positive!")
-
-        # Verify that the projections are the same size
-        verify_arrays_have_same_shape(
-            [self.projection_xy, self.projection_xz, self.projection_yz, self.flat_projection_xy],
-            msg="Projections differ in shape!",
-        )
-        verify_arrays_have_correct_length(
-            [(self.projection_xy, 0)], num_bins, msg=f"Expected the projection to have {num_bins} rows!"
-        )
-        verify_arrays_have_correct_length(
-            [(self.projection_xy, 1)], num_bins, msg=f"Expected the projection to have {num_bins} columns!"
-        )
-
-        # Useful properties
-        self.pixel_to_distance: float = 2 * self.extent / self.num_bins
-        self.overdensity: _Array3D_f32 = np.divide(
-            self.flat_projection_xy,
-            self.flat_projection_xy[:, :, 0][:, :, None],
-            where=self.flat_projection_xy[:, :, 0][:, :, None] != 0,
-        )
-        self.density_contrast: _Array3D_f32 = self.overdensity - 1
-
+    @override
     def __eq__(self, other: object) -> bool:
-        """Compare for equality.
-
-        Parameters
-        ----------
-        other : object
-            The object to compare to.
-
-        Returns
-        -------
-        bool
-            `True` if the other object is equal to this object, `False` otherwise.
-
-        Notes
-        -----
-        Equality means all fields are equal.
-
-        """
         if not isinstance(other, type(self)):
             return False
         equality = True
-        equality &= self.name == other.name
-        equality &= self.extent == other.extent
         equality &= self.num_bins == other.num_bins
-        equality &= self.disc_profile == other.disc_profile
-        equality &= np.all(self.projection_xy == other.projection_xy)
-        equality &= np.all(self.projection_xz == other.projection_xz)
-        equality &= np.all(self.projection_yz == other.projection_yz)
-        equality &= np.all(self.flat_projection_xy == other.flat_projection_xy)
+        equality &= self.num_frames == other.num_frames
+        equality &= self.disc_scale_length == other.disc_scale_length
+        equality &= self.disc_scale_mass == other.disc_scale_mass
+        equality &= self.extent == other.extent
+        equality &= self.name == other.name
+        equality &= np.array_equal(self.completeness, other.completeness)
+        equality &= np.array_equal(self.flat_projection_xy, other.flat_projection_xy)
+        equality &= np.array_equal(self.projection_xy, other.projection_xy)
+        equality &= np.array_equal(self.projection_xz, other.projection_xz)
+        equality &= np.array_equal(self.projection_yz, other.projection_yz)
         return bool(equality)
 
     @classmethod
-    def load(cls, path: Path) -> Self:
-        """Deserialize data from file.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        Returns
-        -------
-        SurfaceDensityData
-            The deserialized data.
-
-        """
-        with Hdf5File(path, "r") as file:
-            verify_file_type_from_hdf5(file, cls.DATA_FILE_TYPE)
-            verify_file_version_from_hdf5(file, cls.VERSION)
-
-            extent: float = get_float_attr_from_hdf5(file, "extent")
-            num_bins: int = get_int_attr_from_hdf5(file, "num_bins")
-            name: str = get_str_attr_from_hdf5(file, "name")
-
-            # Projections
-            projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float32))
-            projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float32))
-            projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float32))
-            flat_projection_xy = verify_array_is_3d(
-                read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=np.float32)
-            )
-
-            disc_profile = ExponentialDiscProfileData.load_from(file)
-
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path.absolute())
+    def empty(cls, *, num_bins: int, num_frames: int) -> Self:
+        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
+        flat_projection_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_xz: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_yz: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         return cls(
+            completeness=completeness,
+            flat_projection_xy=flat_projection_xy,
             projection_xy=projection_xy,
             projection_xz=projection_xz,
             projection_yz=projection_yz,
-            flat_projection_xy=flat_projection_xy,
-            extent=extent,
-            num_bins=num_bins,
-            disc_profile=disc_profile,
-            name=name,
         )
 
+    @staticmethod
+    def load(path: Path) -> GridData:
+        path = path.expanduser()
+        cls = GridData
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        return data
+
+    @classmethod
+    def migrate(cls, path: Path) -> None:
+        path = path.expanduser()
+        with Hdf5File(path, "r") as file:
+            assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
+
+            file_version = get_file_version(file)
+            if file_version == LATEST_VERSION_V4:
+                return
+            file_version = get_file_version(file)
+            assert file_version.major in _LOADERS
+            data = _LOADERS[file_version.major](file)
+
+        data.dump(path)
+
     def dump(self, path: Path) -> None:
-        """Serialize data to disk.
-
-        Parameters
-        ----------
-        path : Path
-            The path to the data.
-
-        """
+        path = path.expanduser()
         cls = type(self)
         with Hdf5File(path, "w") as file:
-            # General
-            file.attrs["type"] = cls.DATA_FILE_TYPE
-            file.attrs["version"] = str(cls.VERSION)
-            file.attrs["extent"] = self.extent
-            file.attrs["num_bins"] = self.num_bins
-            file.attrs["name"] = self.name
-
-            file.create_dataset("projection_xy", data=self.projection_xy)
-            file.create_dataset("projection_xz", data=self.projection_xz)
-            file.create_dataset("projection_yz", data=self.projection_yz)
-            file.create_dataset("flat_projection_xy", data=self.flat_projection_xy)
-            self.disc_profile.dump_into(file)
+            file.attrs.create("type", str(cls.DATA_FILE_TYPE))
+            file.attrs.create("version", str(cls.VERSION))
+            file.attrs.create("disc_scale_length", self.disc_scale_length, dtype=np.float64)
+            file.attrs.create("disc_scale_mass", self.disc_scale_mass, dtype=np.float64)
+            file.attrs.create("extent", self.extent, dtype=np.float64)
+            file.attrs.create("name", str(self.name))
+            _ = file.create_dataset("completeness", data=self.completeness)
+            _ = file.create_dataset("flat_projection_xy", data=self.flat_projection_xy)
+            _ = file.create_dataset("projection_xy", data=self.projection_xy)
+            _ = file.create_dataset("projection_xz", data=self.projection_xz)
+            _ = file.create_dataset("projection_yz", data=self.projection_yz)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
-    # Convenience functions
-    def get_limits(self) -> tuple[float, float]:
-        """Return the 1D limits of the surface density grid.
+    @classmethod
+    def save_init(
+        cls,
+        path: Path,
+        *,
+        disc_scale_length: float,
+        disc_scale_mass: float,
+        extent: float,
+        name: str,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-        Returns
-        -------
-        limits : tuple[float, float]
-            The 1D limits.
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            file.attrs.modify("disc_scale_length", disc_scale_length)
+            file.attrs.modify("disc_scale_mass", disc_scale_mass)
+            file.attrs.modify("extent", extent)
+            file.attrs.modify("name", name)
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-        """
-        return (-self.extent, self.extent)
+    @classmethod
+    def save_frame(
+        cls,
+        path: Path,
+        frame: int,
+        *,
+        flat_projection_xy: _Array2D_f64,
+        projection_xy: _Array2D_f64,
+        projection_xz: _Array2D_f64,
+        projection_yz: _Array2D_f64,
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            raise ValueError(msg)
 
-    def get_2d_limits(self) -> tuple[float, float, float, float]:
-        """Return the 2D limits of the surface density grid.
+        num_bins = check_axis_length(
+            ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape))
+        )
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            get_dataset_from_hdf5(file, "completeness").write_direct(
+                np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
+            )
+            get_dataset_from_hdf5(file, "flat_projection_xy").write_direct(
+                np.asarray(flat_projection_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+            get_dataset_from_hdf5(file, "projection_xy").write_direct(
+                np.asarray(projection_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+            get_dataset_from_hdf5(file, "projection_xz").write_direct(
+                np.asarray(projection_xz, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+            get_dataset_from_hdf5(file, "projection_yz").write_direct(
+                np.asarray(projection_yz, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
-        Returns
-        -------
-        limits : tuple[float, float, float, float]
-            The 2D limits.
 
-        """
-        return (-self.extent, self.extent, -self.extent, self.extent)
+def load_v3(file: Hdf5File) -> GridData:
+    cls = GridData
+    disc_scale_length = get_float_attr_from_hdf5(file, "disc_scale_length")
+    disc_scale_mass = get_float_attr_from_hdf5(file, "disc_scale_mass")
+    extent = get_float_attr_from_hdf5(file, "extent")
+    name = get_str_attr_from_hdf5(file, "name")
+    flat_projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=np.float32))
+    projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float32))
+    projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float32))
+    projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float32))
+    num_bins = check_axis_length(
+        ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape),)
+    )
+    num_frames = check_axis_length(
+        ((2, flat_projection_xy.shape), (2, projection_xy.shape), (2, projection_xz.shape), (2, projection_yz.shape),)
+    )
 
-    def get_min_density(self) -> float:
-        """Return the minimum (non-zero) density across all projections.
+    return cls(
+        disc_scale_length=disc_scale_length,
+        disc_scale_mass=disc_scale_mass,
+        extent=extent,
+        name=name,
+        flat_projection_xy=flat_projection_xy.astype(np.float64),
+        projection_xy=projection_xy.astype(np.float64),
+        projection_xz=projection_xz.astype(np.float64),
+        projection_yz=projection_yz.astype(np.float64),
+    )
 
-        Returns
-        -------
-        float
-            The minimum density across all projections.
 
-        """
-        min_xy = np.nanmin(self.projection_xy[self.projection_xy > 0])
-        min_xz = np.nanmin(self.projection_xz[self.projection_xz > 0])
-        min_yz = np.nanmin(self.projection_yz[self.projection_yz > 0])
-        return float(np.min([min_xy, min_xz, min_yz]))
+def load_v4(file: Hdf5File) -> GridData:
+    cls = GridData
+    disc_scale_length = get_float_attr_from_hdf5(file, "disc_scale_length")
+    disc_scale_mass = get_float_attr_from_hdf5(file, "disc_scale_mass")
+    extent = get_float_attr_from_hdf5(file, "extent")
+    name = get_str_attr_from_hdf5(file, "name")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    flat_projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "flat_projection_xy", dtype=np.float64))
+    projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float64))
+    projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float64))
+    projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float64))
+    num_bins = check_axis_length(
+        ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape),)
+    )
+    num_frames = check_axis_length(
+        ((2, flat_projection_xy.shape), (2, projection_xy.shape), (2, projection_xz.shape), (2, projection_yz.shape),)
+    )
 
-    def get_min_flat_density(self) -> float:
-        """Return the minimum (non-zero) flattened density in the xy projection.
+    return cls(
+        disc_scale_length=disc_scale_length,
+        disc_scale_mass=disc_scale_mass,
+        extent=extent,
+        name=name,
+        completeness=completeness,
+        flat_projection_xy=flat_projection_xy,
+        projection_xy=projection_xy,
+        projection_xz=projection_xz,
+        projection_yz=projection_yz,
+    )
 
-        Returns
-        -------
-        float
-            The minimum flattened density in the xy projection.
 
-        """
-        return float(np.nanmin(self.flat_projection_xy[self.flat_projection_xy > 0]))
+_LOADERS: Mapping[int, _GridDataLoader] = {
+    3: load_v3,
+    4: load_v4,
+}
 
-    def get_max_density(self) -> float:
-        """Return the maximum density across all projections.
 
-        Returns
-        -------
-        float
-            The maximum density across all projections.
-
-        """
-        max_xy = np.nanmax(self.projection_xy)
-        max_xz = np.nanmax(self.projection_xz)
-        max_yz = np.nanmax(self.projection_yz)
-        return float(np.max([max_xy, max_xz, max_yz]))
-
-    def get_max_flat_density(self) -> float:
-        """Return the maximum (non-zero) flattened density in the xy projection.
-
-        Returns
-        -------
-        float
-            The maximum flattened density in the xy projection.
-
-        """
-        return float(np.nanmax(self.flat_projection_xy))
-
-    def get_dummy_data(self) -> _Array2D_f32:
-        """Return an array of ones with the same shape as the grid.
-
-        Returns
-        -------
-        _Array2D_f32
-            The array of ones with the same shape as the grid.
-
-        """
-        return np.ones((self.num_bins, self.num_bins), dtype=np.float32)

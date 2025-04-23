@@ -8,7 +8,7 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 from typing_extensions import override
 
-from novie_data_gen import (
+from novie_data.novie_data_gen import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
 
     _Array1D_u32: TypeAlias = Array1D[np.uint32]
     _Array1D_f32: TypeAlias = Array1D[np.float32]
@@ -49,7 +49,6 @@ class SnapshotData:
     DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
     VERSION: ClassVar[Version] = LATEST_VERSION_V1
 
-
     def __init__(
         self,
         *,
@@ -58,9 +57,7 @@ class SnapshotData:
         completeness: _Array1D_b8 | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
-        n = check_axis_length(
-            ((0, codes.shape), (0, times.shape))
-        )
+        n = check_axis_length(((0, codes.shape), (0, times.shape)))
         match completeness:
             case True:
                 completeness = np.ones((n,), dtype=np.bool_)
@@ -185,7 +182,10 @@ def load_v0(file: Hdf5File) -> SnapshotData:
     codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint32))
     times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float32))
     n = check_axis_length(
-        ((0, codes.shape), (0, times.shape),)
+        (
+            (0, codes.shape),
+            (0, times.shape),
+        )
     )
 
     return cls(
@@ -202,7 +202,10 @@ def load_v1(file: Hdf5File) -> SnapshotData:
     completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
     times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
     n = check_axis_length(
-        ((0, codes.shape), (0, times.shape),)
+        (
+            (0, codes.shape),
+            (0, times.shape),
+        )
     )
 
     return cls(
@@ -217,5 +220,3 @@ _LOADERS: Mapping[int, _SnapshotDataLoader] = {
     0: load_v0,
     1: load_v1,
 }
-
-

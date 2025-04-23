@@ -8,7 +8,7 @@ from h5py import File as Hdf5File
 from packaging.version import Version
 from typing_extensions import override
 
-from novie_data_gen import (
+from novie_data.novie_data_gen import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
 
     _Array1D_f32: TypeAlias = Array1D[np.float32]
     _Array3D_f32: TypeAlias = Array3D[np.float32]

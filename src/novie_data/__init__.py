@@ -30,4 +30,4 @@ __all__ = [
     "WrinkleResidualsData",
 ]
 
-__version__: str = "3.0.0"
+__version__: str = "4.0.0"

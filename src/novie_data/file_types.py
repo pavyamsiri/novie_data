@@ -15,7 +15,7 @@ from .corrugation_residuals_data import CorrugationResidualsData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
 from .snail_data import SnailData
-from .surface_density_data import SurfaceDensityData
+from .surface_density_data import GridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 
@@ -46,7 +46,7 @@ def get_novie_type(input_path: Path) -> type[NovieData]:
         CorrugationData,
         CorrugationResidualsData,
         SnailData,
-        SurfaceDensityData,
+        GridData,
         SpiralArmCoverageData,
         WrinkleData,
         WrinkleResidualsData,

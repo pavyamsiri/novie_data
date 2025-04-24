@@ -173,7 +173,7 @@ class SnapshotData:
             get_dataset_from_hdf5(file, "times").write_direct(
                 np.asarray(times, dtype=np.float64).reshape(1), np.s_[0], np.s_[frame]
             )
-        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v0(file: Hdf5File) -> SnapshotData:

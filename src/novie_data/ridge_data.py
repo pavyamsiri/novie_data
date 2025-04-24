@@ -50,7 +50,6 @@ class RidgeData:
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
     VERSION: ClassVar[Version] = LATEST_VERSION_V3
 
-
     def __init__(
         self,
         *,
@@ -63,15 +62,9 @@ class RidgeData:
         min_velocity: float = -255,
         name: str = "UNKNOWN",
     ) -> None:
-        num_frames = check_axis_length(
-            ((2, mass_density.shape), (2, number_density.shape))
-        )
-        num_radial_bins = check_axis_length(
-            ((1, mass_density.shape), (1, number_density.shape))
-        )
-        num_velocity_bins = check_axis_length(
-            ((0, mass_density.shape), (0, number_density.shape))
-        )
+        num_frames = check_axis_length(((2, mass_density.shape), (2, number_density.shape)))
+        num_radial_bins = check_axis_length(((1, mass_density.shape), (1, number_density.shape)))
+        num_velocity_bins = check_axis_length(((0, mass_density.shape), (0, number_density.shape)))
         match completeness:
             case True:
                 completeness = np.ones((num_frames,), dtype=np.bool_)
@@ -211,24 +204,24 @@ class RidgeData:
             msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
             raise ValueError(msg)
 
-        num_radial_bins = check_axis_length(
-            ((1, mass_density.shape), (1, number_density.shape))
-        )
-        num_velocity_bins = check_axis_length(
-            ((0, mass_density.shape), (0, number_density.shape))
-        )
+        num_radial_bins = check_axis_length(((1, mass_density.shape), (1, number_density.shape)))
+        num_velocity_bins = check_axis_length(((0, mass_density.shape), (0, number_density.shape)))
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mass_density").write_direct(
-                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
             get_dataset_from_hdf5(file, "number_density").write_direct(
-                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
-        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v2(file: Hdf5File) -> RidgeData:
@@ -279,5 +272,3 @@ _LOADERS: Mapping[int, _RidgeDataLoader] = {
     2: load_v2,
     3: load_v3,
 }
-
-

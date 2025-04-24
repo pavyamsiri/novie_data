@@ -245,7 +245,7 @@ class SnailData:
                 np.s_[:, :, :],
                 np.s_[:, :, frame, :],
             )
-        log.info("Successfully saved frame {frame} of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v4(file: Hdf5File) -> SnailData:

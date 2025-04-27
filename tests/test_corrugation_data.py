@@ -145,6 +145,7 @@ def test_incremental_serde(tmp_path: Path) -> None:
     radii = np.linspace(min_radius, max_radius, num_radial_bins, dtype=np.float64).reshape(num_radial_bins)
     CorrugationData.save_init(
         output_path,
+        omega=0.55,
         cutoff_frequency=12.0,
         distance_error=1.033,
         inner_radius=0,
@@ -159,6 +160,7 @@ def test_incremental_serde(tmp_path: Path) -> None:
     )
     s = CorrugationData.load(output_path)
     assert s.name == "test"
+    assert s.omega == 0.55
     assert s.num_frames == 10
     assert s.cutoff_frequency == 12.0
     assert s.distance_error == 1.033

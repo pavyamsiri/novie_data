@@ -95,11 +95,11 @@ class GridData:
         equality &= self.disc_scale_mass == other.disc_scale_mass
         equality &= self.extent == other.extent
         equality &= self.name == other.name
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.flat_projection_xy, other.flat_projection_xy)
-        equality &= np.array_equal(self.projection_xy, other.projection_xy)
-        equality &= np.array_equal(self.projection_xz, other.projection_xz)
-        equality &= np.array_equal(self.projection_yz, other.projection_yz)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.flat_projection_xy, other.flat_projection_xy, equal_nan=True)
+        equality &= np.array_equal(self.projection_xy, other.projection_xy, equal_nan=True)
+        equality &= np.array_equal(self.projection_xz, other.projection_xz, equal_nan=True)
+        equality &= np.array_equal(self.projection_yz, other.projection_yz, equal_nan=True)
         return bool(equality)
 
     @classmethod

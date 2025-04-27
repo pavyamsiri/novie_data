@@ -8,6 +8,7 @@ from h5py import File as Hdf5File
 from novie_helpers import (
     check_axis_length,
     get_file_version,
+    get_float_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 LATEST_VERSION_V2 = Version("2.0.0")
 LATEST_VERSION_V3 = Version("3.0.0")
+LATEST_VERSION_V4 = Version("4.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -42,7 +44,7 @@ class _CorrugationResidualsDataLoader(Protocol):
 
 class CorrugationResidualsData:
     DATA_FILE_TYPE: ClassVar[str] = "CorrugationResiduals"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V3
+    VERSION: ClassVar[Version] = LATEST_VERSION_V4
 
 
     def __init__(
@@ -53,6 +55,7 @@ class CorrugationResidualsData:
         summary: _Array2D_f64,
         metric_name: str = "UNSET",
         name: str = "UNKNOWN",
+        omega: float = 0,
     ) -> None:
         num_bins = check_axis_length(
             ((0, bin_values.shape), (0, metric.shape))
@@ -68,6 +71,7 @@ class CorrugationResidualsData:
         self.num_locations: int = num_locations
         self.metric_name: str = metric_name
         self.name: str = name
+        self.omega: float = omega
         self.bin_values: _Array1D_f64 = bin_values
         self.metric: _Array3D_f64 = metric
         self.summary: _Array2D_f64 = summary
@@ -82,9 +86,10 @@ class CorrugationResidualsData:
         equality &= self.num_locations == other.num_locations
         equality &= self.metric_name == other.metric_name
         equality &= self.name == other.name
-        equality &= np.array_equal(self.bin_values, other.bin_values)
-        equality &= np.array_equal(self.metric, other.metric)
-        equality &= np.array_equal(self.summary, other.summary)
+        equality &= self.omega == other.omega
+        equality &= np.array_equal(self.bin_values, other.bin_values, equal_nan=True)
+        equality &= np.array_equal(self.metric, other.metric, equal_nan=True)
+        equality &= np.array_equal(self.summary, other.summary, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -119,7 +124,7 @@ class CorrugationResidualsData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V3:
+            if file_version == LATEST_VERSION_V4:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -135,6 +140,7 @@ class CorrugationResidualsData:
             file.attrs.create("version", str(cls.VERSION))
             file.attrs.create("metric_name", str(self.metric_name))
             file.attrs.create("name", str(self.name))
+            file.attrs.create("omega", self.omega, dtype=np.float64)
             _ = file.create_dataset("bin_values", data=self.bin_values)
             _ = file.create_dataset("metric", data=self.metric)
             _ = file.create_dataset("summary", data=self.summary)
@@ -177,9 +183,29 @@ def load_v3(file: Hdf5File) -> CorrugationResidualsData:
     )
 
 
+def load_v4(file: Hdf5File) -> CorrugationResidualsData:
+    cls = CorrugationResidualsData
+    metric_name = get_str_attr_from_hdf5(file, "metric_name")
+    name = get_str_attr_from_hdf5(file, "name")
+    omega = get_float_attr_from_hdf5(file, "omega")
+    bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64))
+    metric = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float64))
+    summary = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float64))
+
+    return cls(
+        metric_name=metric_name,
+        name=name,
+        omega=omega,
+        bin_values=bin_values,
+        metric=metric,
+        summary=summary,
+    )
+
+
 _LOADERS: Mapping[int, _CorrugationResidualsDataLoader] = {
     2: load_v2,
     3: load_v3,
+    4: load_v4,
 }
 
 

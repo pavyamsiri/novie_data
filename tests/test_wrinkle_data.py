@@ -121,6 +121,7 @@ def test_incremental_serde(tmp_path: Path) -> None:
         angular_momentum=angular_momentum,
         distance_error=1.3,
         max_lz=11.11,
+        omega=-0.44,
         min_lz=0,
         name="test",
         sphere_radius=1.0,
@@ -128,6 +129,7 @@ def test_incremental_serde(tmp_path: Path) -> None:
     s = WrinkleData.load(output_path)
 
     assert s.distance_error == 1.3
+    assert s.omega == -0.44
     assert s.max_lz == 11.11
     assert s.min_lz == 0
     assert s.name == "test"

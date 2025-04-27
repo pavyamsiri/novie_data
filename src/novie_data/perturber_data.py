@@ -81,10 +81,10 @@ class PerturberData:
         equality = True
         equality &= self.num_frames == other.num_frames
         equality &= self.name == other.name
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.mass, other.mass)
-        equality &= np.array_equal(self.position, other.position)
-        equality &= np.array_equal(self.velocity, other.velocity)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.mass, other.mass, equal_nan=True)
+        equality &= np.array_equal(self.position, other.position, equal_nan=True)
+        equality &= np.array_equal(self.velocity, other.velocity, equal_nan=True)
         return bool(equality)
 
     @classmethod

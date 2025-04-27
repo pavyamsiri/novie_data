@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 LATEST_VERSION_V3 = Version("3.0.0")
 LATEST_VERSION_V4 = Version("4.0.0")
+LATEST_VERSION_V5 = Version("5.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class _CorrugationDataLoader(Protocol):
 
 class CorrugationData:
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V4
+    VERSION: ClassVar[Version] = LATEST_VERSION_V5
 
 
     def __init__(
@@ -67,6 +68,7 @@ class CorrugationData:
         min_longitude_deg: float = 225,
         min_radius: float = 0,
         name: str = "UNKNOWN",
+        omega: float = 0,
         outer_radius: float = 7,
     ) -> None:
         num_frames = check_axis_length(
@@ -102,6 +104,7 @@ class CorrugationData:
         self.min_longitude_deg: float = min_longitude_deg
         self.min_radius: float = min_radius
         self.name: str = name
+        self.omega: float = omega
         self.outer_radius: float = outer_radius
         self.completeness: _Array1D_b8 = completeness
         self.mean_height: _Array3D_f64 = mean_height
@@ -127,12 +130,13 @@ class CorrugationData:
         equality &= self.min_longitude_deg == other.min_longitude_deg
         equality &= self.min_radius == other.min_radius
         equality &= self.name == other.name
+        equality &= self.omega == other.omega
         equality &= self.outer_radius == other.outer_radius
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.mean_height, other.mean_height)
-        equality &= np.array_equal(self.mean_height_error, other.mean_height_error)
-        equality &= np.array_equal(self.projection_rz, other.projection_rz)
-        equality &= np.array_equal(self.radii, other.radii)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.mean_height, other.mean_height, equal_nan=True)
+        equality &= np.array_equal(self.mean_height_error, other.mean_height_error, equal_nan=True)
+        equality &= np.array_equal(self.projection_rz, other.projection_rz, equal_nan=True)
+        equality &= np.array_equal(self.radii, other.radii, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -178,7 +182,7 @@ class CorrugationData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V4:
+            if file_version == LATEST_VERSION_V5:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -201,6 +205,7 @@ class CorrugationData:
             file.attrs.create("min_longitude_deg", self.min_longitude_deg, dtype=np.float64)
             file.attrs.create("min_radius", self.min_radius, dtype=np.float64)
             file.attrs.create("name", str(self.name))
+            file.attrs.create("omega", self.omega, dtype=np.float64)
             file.attrs.create("outer_radius", self.outer_radius, dtype=np.float64)
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("mean_height", data=self.mean_height)
@@ -223,6 +228,7 @@ class CorrugationData:
         min_longitude_deg: float,
         min_radius: float,
         name: str,
+        omega: float,
         outer_radius: float,
         radii: _Array1D_f64,
     ) -> None:
@@ -242,6 +248,7 @@ class CorrugationData:
             file.attrs.modify("min_longitude_deg", min_longitude_deg)
             file.attrs.modify("min_radius", min_radius)
             file.attrs.modify("name", name)
+            file.attrs.modify("omega", omega)
             file.attrs.modify("outer_radius", outer_radius)
             get_dataset_from_hdf5(file, "radii").write_direct(
                 np.asarray(radii, dtype=np.float64).reshape(radii.shape), np.s_[:], np.s_[:]
@@ -361,9 +368,49 @@ def load_v4(file: Hdf5File) -> CorrugationData:
     )
 
 
+def load_v5(file: Hdf5File) -> CorrugationData:
+    cls = CorrugationData
+    cutoff_frequency = get_float_attr_from_hdf5(file, "cutoff_frequency")
+    distance_error = get_float_attr_from_hdf5(file, "distance_error")
+    inner_radius = get_float_attr_from_hdf5(file, "inner_radius")
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_longitude_deg = get_float_attr_from_hdf5(file, "max_longitude_deg")
+    max_radius = get_float_attr_from_hdf5(file, "max_radius")
+    min_longitude_deg = get_float_attr_from_hdf5(file, "min_longitude_deg")
+    min_radius = get_float_attr_from_hdf5(file, "min_radius")
+    name = get_str_attr_from_hdf5(file, "name")
+    omega = get_float_attr_from_hdf5(file, "omega")
+    outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64))
+    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64))
+    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64))
+    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+
+    return cls(
+        cutoff_frequency=cutoff_frequency,
+        distance_error=distance_error,
+        inner_radius=inner_radius,
+        max_height=max_height,
+        max_longitude_deg=max_longitude_deg,
+        max_radius=max_radius,
+        min_longitude_deg=min_longitude_deg,
+        min_radius=min_radius,
+        name=name,
+        omega=omega,
+        outer_radius=outer_radius,
+        completeness=completeness,
+        mean_height=mean_height,
+        mean_height_error=mean_height_error,
+        projection_rz=projection_rz,
+        radii=radii,
+    )
+
+
 _LOADERS: Mapping[int, _CorrugationDataLoader] = {
     3: load_v3,
     4: load_v4,
+    5: load_v5,
 }
 
 

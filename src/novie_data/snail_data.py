@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 LATEST_VERSION_V4 = Version("4.0.0")
 LATEST_VERSION_V5 = Version("5.0.0")
+LATEST_VERSION_V6 = Version("6.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class _SnailDataLoader(Protocol):
 
 class SnailData:
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V5
+    VERSION: ClassVar[Version] = LATEST_VERSION_V6
 
 
     def __init__(
@@ -55,6 +56,7 @@ class SnailData:
         max_height: float = 1,
         max_velocity: float = 60,
         name: str = "UNKNOWN",
+        omega: float = 0,
         sphere_radius: float = 2,
     ) -> None:
         num_frames = check_axis_length(
@@ -84,6 +86,7 @@ class SnailData:
         self.max_height: float = max_height
         self.max_velocity: float = max_velocity
         self.name: str = name
+        self.omega: float = omega
         self.sphere_radius: float = sphere_radius
         self.azimuthal_velocity: _Array4D_f64 = azimuthal_velocity
         self.completeness: _Array1D_b8 = completeness
@@ -102,11 +105,12 @@ class SnailData:
         equality &= self.max_height == other.max_height
         equality &= self.max_velocity == other.max_velocity
         equality &= self.name == other.name
+        equality &= self.omega == other.omega
         equality &= self.sphere_radius == other.sphere_radius
-        equality &= np.array_equal(self.azimuthal_velocity, other.azimuthal_velocity)
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.radial_velocity, other.radial_velocity)
-        equality &= np.array_equal(self.surface_density, other.surface_density)
+        equality &= np.array_equal(self.azimuthal_velocity, other.azimuthal_velocity, equal_nan=True)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.radial_velocity, other.radial_velocity, equal_nan=True)
+        equality &= np.array_equal(self.surface_density, other.surface_density, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -150,7 +154,7 @@ class SnailData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V5:
+            if file_version == LATEST_VERSION_V6:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -167,6 +171,7 @@ class SnailData:
             file.attrs.create("max_height", self.max_height, dtype=np.float64)
             file.attrs.create("max_velocity", self.max_velocity, dtype=np.float64)
             file.attrs.create("name", str(self.name))
+            file.attrs.create("omega", self.omega, dtype=np.float64)
             file.attrs.create("sphere_radius", self.sphere_radius, dtype=np.float64)
             _ = file.create_dataset("azimuthal_velocity", data=self.azimuthal_velocity)
             _ = file.create_dataset("completeness", data=self.completeness)
@@ -182,6 +187,7 @@ class SnailData:
         max_height: float,
         max_velocity: float,
         name: str,
+        omega: float,
         sphere_radius: float,
     ) -> None:
         path = path.expanduser()
@@ -194,6 +200,7 @@ class SnailData:
             file.attrs.modify("max_height", max_height)
             file.attrs.modify("max_velocity", max_velocity)
             file.attrs.modify("name", name)
+            file.attrs.modify("omega", omega)
             file.attrs.modify("sphere_radius", sphere_radius)
         log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
@@ -282,9 +289,35 @@ def load_v5(file: Hdf5File) -> SnailData:
     )
 
 
+def load_v6(file: Hdf5File) -> SnailData:
+    cls = SnailData
+    max_height = get_float_attr_from_hdf5(file, "max_height")
+    max_velocity = get_float_attr_from_hdf5(file, "max_velocity")
+    name = get_str_attr_from_hdf5(file, "name")
+    omega = get_float_attr_from_hdf5(file, "omega")
+    sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
+    azimuthal_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float64))
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float64))
+    surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float64))
+
+    return cls(
+        max_height=max_height,
+        max_velocity=max_velocity,
+        name=name,
+        omega=omega,
+        sphere_radius=sphere_radius,
+        azimuthal_velocity=azimuthal_velocity,
+        completeness=completeness,
+        radial_velocity=radial_velocity,
+        surface_density=surface_density,
+    )
+
+
 _LOADERS: Mapping[int, _SnailDataLoader] = {
     4: load_v4,
     5: load_v5,
+    6: load_v6,
 }
 
 

@@ -42,6 +42,7 @@ class SnapshotData:
     DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
     VERSION: ClassVar[Version] = LATEST_VERSION_V1
 
+
     def __init__(
         self,
         *,
@@ -50,7 +51,9 @@ class SnapshotData:
         completeness: _Array1D_b8 | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
-        n = check_axis_length(((0, codes.shape), (0, times.shape)))
+        n = check_axis_length(
+            ((0, codes.shape), (0, times.shape))
+        )
         match completeness:
             case True:
                 completeness = np.ones((n,), dtype=np.bool_)
@@ -72,9 +75,9 @@ class SnapshotData:
         equality = True
         equality &= self.num_frames == other.num_frames
         equality &= self.name == other.name
-        equality &= np.array_equal(self.codes, other.codes)
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.times, other.times)
+        equality &= np.array_equal(self.codes, other.codes, equal_nan=True)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.times, other.times, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -201,3 +204,5 @@ _LOADERS: Mapping[int, _SnapshotDataLoader] = {
     0: load_v0,
     1: load_v1,
 }
+
+

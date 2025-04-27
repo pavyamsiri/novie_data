@@ -99,9 +99,9 @@ class RidgeData:
         equality &= self.min_radius == other.min_radius
         equality &= self.min_velocity == other.min_velocity
         equality &= self.name == other.name
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.mass_density, other.mass_density)
-        equality &= np.array_equal(self.number_density, other.number_density)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.mass_density, other.mass_density, equal_nan=True)
+        equality &= np.array_equal(self.number_density, other.number_density, equal_nan=True)
         return bool(equality)
 
     @classmethod

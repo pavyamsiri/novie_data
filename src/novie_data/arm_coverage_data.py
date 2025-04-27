@@ -9,6 +9,7 @@ from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
+    get_float_attr_from_hdf5,
     get_str_attr_from_hdf5,
     get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 LATEST_VERSION_V2 = Version("2.0.0")
 LATEST_VERSION_V3 = Version("3.0.0")
+LATEST_VERSION_V4 = Version("4.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ class _SpiralArmCoverageDataLoader(Protocol):
 
 class SpiralArmCoverageData:
     DATA_FILE_TYPE: ClassVar[str] = "SpiralArmCoverage"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V3
+    VERSION: ClassVar[Version] = LATEST_VERSION_V4
 
 
     def __init__(
@@ -56,6 +58,7 @@ class SpiralArmCoverageData:
         num_total_arm_pixels: _Array3D_u32,
         completeness: _Array1D_b8 | bool = True,
         name: str = "UNKNOWN",
+        omega: float = 0,
     ) -> None:
         num_arms = check_axis_length(
             ((0, (len(arm_names),)), (1, covered_arm_normalised_densities.shape), (1, num_covered_arm_pixels.shape), (1, num_total_arm_pixels.shape))
@@ -78,6 +81,7 @@ class SpiralArmCoverageData:
         self.num_frames: int = num_frames
         self.num_locations: int = num_locations
         self.name: str = name
+        self.omega: float = omega
         self.arm_names: tuple[str, ...] = arm_names
         self.completeness: _Array1D_b8 = completeness
         self.covered_arm_normalised_densities: _Array3D_f64 = covered_arm_normalised_densities
@@ -93,13 +97,14 @@ class SpiralArmCoverageData:
         equality &= self.num_frames == other.num_frames
         equality &= self.num_locations == other.num_locations
         equality &= self.name == other.name
+        equality &= self.omega == other.omega
         equality &= len(self.arm_names) == len(other.arm_names) and all(
             x == y for x, y in zip(self.arm_names, other.arm_names, strict=True)
         )
-        equality &= np.array_equal(self.completeness, other.completeness)
-        equality &= np.array_equal(self.covered_arm_normalised_densities, other.covered_arm_normalised_densities)
-        equality &= np.array_equal(self.num_covered_arm_pixels, other.num_covered_arm_pixels)
-        equality &= np.array_equal(self.num_total_arm_pixels, other.num_total_arm_pixels)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(self.covered_arm_normalised_densities, other.covered_arm_normalised_densities, equal_nan=True)
+        equality &= np.array_equal(self.num_covered_arm_pixels, other.num_covered_arm_pixels, equal_nan=True)
+        equality &= np.array_equal(self.num_total_arm_pixels, other.num_total_arm_pixels, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -138,7 +143,7 @@ class SpiralArmCoverageData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V3:
+            if file_version == LATEST_VERSION_V4:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -153,6 +158,7 @@ class SpiralArmCoverageData:
             file.attrs.create("type", str(cls.DATA_FILE_TYPE))
             file.attrs.create("version", str(cls.VERSION))
             file.attrs.create("name", str(self.name))
+            file.attrs.create("omega", self.omega, dtype=np.float64)
             _ = file.create_dataset("arm_names", data=self.arm_names)
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("covered_arm_normalised_densities", data=self.covered_arm_normalised_densities)
@@ -167,6 +173,7 @@ class SpiralArmCoverageData:
         *,
         arm_names: tuple[str, ...],
         name: str,
+        omega: float,
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
@@ -176,6 +183,7 @@ class SpiralArmCoverageData:
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             file.attrs.modify("name", name)
+            file.attrs.modify("omega", omega)
             get_dataset_from_hdf5(file, "arm_names").write_direct(
                 np.asarray(arm_names, dtype=np.object_), np.s_[:], np.s_[:]
             )
@@ -255,9 +263,31 @@ def load_v3(file: Hdf5File) -> SpiralArmCoverageData:
     )
 
 
+def load_v4(file: Hdf5File) -> SpiralArmCoverageData:
+    cls = SpiralArmCoverageData
+    name = get_str_attr_from_hdf5(file, "name")
+    omega = get_float_attr_from_hdf5(file, "omega")
+    arm_names = get_string_sequence_from_hdf5(file, "arm_names")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    covered_arm_normalised_densities = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "covered_arm_normalised_densities", dtype=np.float64))
+    num_covered_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_covered_arm_pixels", dtype=np.uint32))
+    num_total_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32))
+
+    return cls(
+        name=name,
+        omega=omega,
+        arm_names=arm_names,
+        completeness=completeness,
+        covered_arm_normalised_densities=covered_arm_normalised_densities,
+        num_covered_arm_pixels=num_covered_arm_pixels,
+        num_total_arm_pixels=num_total_arm_pixels,
+    )
+
+
 _LOADERS: Mapping[int, _SpiralArmCoverageDataLoader] = {
     2: load_v2,
     3: load_v3,
+    4: load_v4,
 }
 
 

@@ -108,12 +108,14 @@ def test_incremental_serde(tmp_path: Path) -> None:
     SpiralArmCoverageData.save_init(
         output_path,
         arm_names=arm_names,
+        omega=23.0,
         name="test",
     )
     s = SpiralArmCoverageData.load(output_path)
     assert s.arm_names == arm_names
     assert s.name == "test"
     assert s.num_frames == 10
+    assert s.omega == 23.0
     assert np.all(~s.completeness)
 
     num_covered_arm_pixels = np.full((num_locations, num_arms), 34, dtype=np.uint32)

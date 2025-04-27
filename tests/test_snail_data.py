@@ -109,11 +109,13 @@ def test_incremental_serde(tmp_path: Path) -> None:
     SnailData.save_init(
         output_path,
         max_height=2,
+        omega=0.11,
         max_velocity=4,
         name="test",
         sphere_radius=2,
     )
     s = SnailData.load(output_path)
+    assert s.omega == 0.11
     assert s.max_height == 2
     assert s.max_velocity == 4
     assert s.sphere_radius == 2

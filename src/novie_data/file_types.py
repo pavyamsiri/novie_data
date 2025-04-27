@@ -16,6 +16,7 @@ from .grid_data import GridData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
 from .snail_data import SnailData
+from .velocity_grid import VelocityGridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 
@@ -54,6 +55,7 @@ def get_novie_type(input_path: Path) -> type[NovieData]:
         RidgeData,
         SnapshotData,
         SolarCircleData,
+        VelocityGridData,
     ]
 
     with Hdf5File(input_path, "r") as file:

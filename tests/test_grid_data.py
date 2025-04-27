@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from novie_helpers.verifier import InconsistentArrayLengthError
 
+from novie_data.grid_data import GridData
 from novie_data.interface import NovieData
-from novie_data.surface_density_data import GridData
-from novie_data.novie_data_gen.builtins._verifier import InconsistentArrayLengthError
 
 
 def test_protocol() -> None:

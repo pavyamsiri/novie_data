@@ -1,32 +1,28 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
-from novie_data.novie_data_gen import (
+from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
     verify_array_is_3d,
     verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
     _Array3D_f32: TypeAlias = Array3D[np.float32]
     _Array2D_f32: TypeAlias = Array2D[np.float32]
@@ -53,6 +49,7 @@ class CorrugationData:
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
     VERSION: ClassVar[Version] = LATEST_VERSION_V4
 
+
     def __init__(
         self,
         *,
@@ -72,9 +69,15 @@ class CorrugationData:
         name: str = "UNKNOWN",
         outer_radius: float = 7,
     ) -> None:
-        num_frames = check_axis_length(((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape)))
-        num_height_bins = check_axis_length(((0, projection_rz.shape),))
-        num_locations = check_axis_length(((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape)))
+        num_frames = check_axis_length(
+            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+        )
+        num_height_bins = check_axis_length(
+            ((0, projection_rz.shape),)
+        )
+        num_locations = check_axis_length(
+            ((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape))
+        )
         num_radial_bins = check_axis_length(
             ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape), (0, radii.shape))
         )
@@ -260,28 +263,28 @@ class CorrugationData:
             msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
             raise ValueError(msg)
 
-        num_height_bins = check_axis_length(((0, projection_rz.shape),))
-        num_locations = check_axis_length(((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape)))
-        num_radial_bins = check_axis_length(((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape)))
+        num_height_bins = check_axis_length(
+            ((0, projection_rz.shape),)
+        )
+        num_locations = check_axis_length(
+            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+        )
+        num_radial_bins = check_axis_length(
+            ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape))
+        )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mean_height").write_direct(
-                np.asarray(mean_height, dtype=np.float64).reshape((num_radial_bins, num_locations)),
-                np.s_[:, :],
-                np.s_[:, frame, :],
+                np.asarray(mean_height, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
             )
             get_dataset_from_hdf5(file, "mean_height_error").write_direct(
-                np.asarray(mean_height_error, dtype=np.float64).reshape((num_radial_bins, num_locations)),
-                np.s_[:, :],
-                np.s_[:, frame, :],
+                np.asarray(mean_height_error, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
             )
             get_dataset_from_hdf5(file, "projection_rz").write_direct(
-                np.asarray(projection_rz, dtype=np.float64).reshape((num_height_bins, num_radial_bins, num_locations)),
-                np.s_[:, :, :],
-                np.s_[:, :, frame, :],
+                np.asarray(projection_rz, dtype=np.float64).reshape((num_height_bins, num_radial_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
             )
         log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
@@ -302,29 +305,6 @@ def load_v3(file: Hdf5File) -> CorrugationData:
     mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32))
     projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32))
     radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32))
-    num_frames = check_axis_length(
-        (
-            (1, mean_height.shape),
-            (1, mean_height_error.shape),
-            (2, projection_rz.shape),
-        )
-    )
-    num_height_bins = check_axis_length(((0, projection_rz.shape),))
-    num_locations = check_axis_length(
-        (
-            (2, mean_height.shape),
-            (2, mean_height_error.shape),
-            (3, projection_rz.shape),
-        )
-    )
-    num_radial_bins = check_axis_length(
-        (
-            (0, mean_height.shape),
-            (0, mean_height_error.shape),
-            (1, projection_rz.shape),
-            (0, radii.shape),
-        )
-    )
 
     return cls(
         cutoff_frequency=cutoff_frequency,
@@ -361,29 +341,6 @@ def load_v4(file: Hdf5File) -> CorrugationData:
     mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64))
     projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64))
     radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
-    num_frames = check_axis_length(
-        (
-            (1, mean_height.shape),
-            (1, mean_height_error.shape),
-            (2, projection_rz.shape),
-        )
-    )
-    num_height_bins = check_axis_length(((0, projection_rz.shape),))
-    num_locations = check_axis_length(
-        (
-            (2, mean_height.shape),
-            (2, mean_height_error.shape),
-            (3, projection_rz.shape),
-        )
-    )
-    num_radial_bins = check_axis_length(
-        (
-            (0, mean_height.shape),
-            (0, mean_height_error.shape),
-            (1, projection_rz.shape),
-            (0, radii.shape),
-        )
-    )
 
     return cls(
         cutoff_frequency=cutoff_frequency,
@@ -408,3 +365,5 @@ _LOADERS: Mapping[int, _CorrugationDataLoader] = {
     3: load_v3,
     4: load_v4,
 }
+
+

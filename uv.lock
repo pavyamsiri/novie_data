@@ -56,6 +56,7 @@ version = "4.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "h5py" },
+    { name = "novie-helpers" },
     { name = "numpy" },
     { name = "optype" },
     { name = "packaging" },
@@ -72,6 +73,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "h5py", specifier = ">=3.12.1" },
+    { name = "novie-helpers", git = "https://github.com/pavyamsiri/novie_helpers.git" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "optype", specifier = ">=0.6.1" },
     { name = "packaging", specifier = ">=24.1" },
@@ -83,6 +85,17 @@ dev = [
     { name = "h5py-stubs", git = "https://github.com/pavyamsiri/h5py-stubs.git" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "scipy-stubs", git = "https://github.com/jorenham/scipy-stubs.git" },
+]
+
+[[package]]
+name = "novie-helpers"
+version = "0.1.0"
+source = { git = "https://github.com/pavyamsiri/novie_helpers.git#7ef6506efc01e58917bb715d045875db09690447" }
+dependencies = [
+    { name = "h5py" },
+    { name = "numpy" },
+    { name = "optype" },
+    { name = "packaging" },
 ]
 
 [[package]]

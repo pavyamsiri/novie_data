@@ -1,32 +1,27 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
-from novie_data.novie_data_gen import (
+from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
-    verify_array_is_3d,
     verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D, Array3D, Array4D
 
     _Array4D_f32: TypeAlias = Array4D[np.float32]
     _Array3D_f32: TypeAlias = Array3D[np.float32]
@@ -49,6 +44,7 @@ class SnailData:
     DATA_FILE_TYPE: ClassVar[str] = "Snail"
     VERSION: ClassVar[Version] = LATEST_VERSION_V5
 
+
     def __init__(
         self,
         *,
@@ -61,11 +57,15 @@ class SnailData:
         name: str = "UNKNOWN",
         sphere_radius: float = 2,
     ) -> None:
-        num_frames = check_axis_length(((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape)))
+        num_frames = check_axis_length(
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
+        )
         num_height_bins = check_axis_length(
             ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
         )
-        num_locations = check_axis_length(((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape)))
+        num_locations = check_axis_length(
+            ((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape))
+        )
         num_velocity_bins = check_axis_length(
             ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
         )
@@ -118,16 +118,10 @@ class SnailData:
         num_locations: int,
         num_velocity_bins: int,
     ) -> Self:
-        azimuthal_velocity: _Array4D_f64 = np.zeros(
-            (num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64
-        )
+        azimuthal_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
         completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        radial_velocity: _Array4D_f64 = np.zeros(
-            (num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64
-        )
-        surface_density: _Array4D_f64 = np.zeros(
-            (num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64
-        )
+        radial_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        surface_density: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
         return cls(
             azimuthal_velocity=azimuthal_velocity,
             completeness=completeness,
@@ -221,29 +215,25 @@ class SnailData:
         num_height_bins = check_axis_length(
             ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
         )
-        num_locations = check_axis_length(((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape)))
+        num_locations = check_axis_length(
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
+        )
         num_velocity_bins = check_axis_length(
             ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
         )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "azimuthal_velocity").write_direct(
-                np.asarray(azimuthal_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)),
-                np.s_[:, :, :],
-                np.s_[:, :, frame, :],
+                np.asarray(azimuthal_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
             )
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "radial_velocity").write_direct(
-                np.asarray(radial_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)),
-                np.s_[:, :, :],
-                np.s_[:, :, frame, :],
+                np.asarray(radial_velocity, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
             )
             get_dataset_from_hdf5(file, "surface_density").write_direct(
-                np.asarray(surface_density, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)),
-                np.s_[:, :, :],
-                np.s_[:, :, frame, :],
+                np.asarray(surface_density, dtype=np.float64).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
             )
         log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
@@ -257,34 +247,6 @@ def load_v4(file: Hdf5File) -> SnailData:
     azimuthal_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "azimuthal_velocity", dtype=np.float32))
     radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float32))
     surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float32))
-    num_frames = check_axis_length(
-        (
-            (2, azimuthal_velocity.shape),
-            (2, radial_velocity.shape),
-            (2, surface_density.shape),
-        )
-    )
-    num_height_bins = check_axis_length(
-        (
-            (1, azimuthal_velocity.shape),
-            (1, radial_velocity.shape),
-            (1, surface_density.shape),
-        )
-    )
-    num_locations = check_axis_length(
-        (
-            (3, azimuthal_velocity.shape),
-            (3, radial_velocity.shape),
-            (3, surface_density.shape),
-        )
-    )
-    num_velocity_bins = check_axis_length(
-        (
-            (0, azimuthal_velocity.shape),
-            (0, radial_velocity.shape),
-            (0, surface_density.shape),
-        )
-    )
 
     return cls(
         max_height=max_height,
@@ -307,34 +269,6 @@ def load_v5(file: Hdf5File) -> SnailData:
     completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
     radial_velocity = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "radial_velocity", dtype=np.float64))
     surface_density = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "surface_density", dtype=np.float64))
-    num_frames = check_axis_length(
-        (
-            (2, azimuthal_velocity.shape),
-            (2, radial_velocity.shape),
-            (2, surface_density.shape),
-        )
-    )
-    num_height_bins = check_axis_length(
-        (
-            (1, azimuthal_velocity.shape),
-            (1, radial_velocity.shape),
-            (1, surface_density.shape),
-        )
-    )
-    num_locations = check_axis_length(
-        (
-            (3, azimuthal_velocity.shape),
-            (3, radial_velocity.shape),
-            (3, surface_density.shape),
-        )
-    )
-    num_velocity_bins = check_axis_length(
-        (
-            (0, azimuthal_velocity.shape),
-            (0, radial_velocity.shape),
-            (0, surface_density.shape),
-        )
-    )
 
     return cls(
         max_height=max_height,
@@ -352,3 +286,5 @@ _LOADERS: Mapping[int, _SnailDataLoader] = {
     4: load_v4,
     5: load_v5,
 }
+
+

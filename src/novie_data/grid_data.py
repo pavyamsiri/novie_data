@@ -1,32 +1,27 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
-from novie_data.novie_data_gen import (
+from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
     verify_array_is_3d,
-    verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D, Array2D, Array3D
 
     _Array3D_f32: TypeAlias = Array3D[np.float32]
     _Array2D_f32: TypeAlias = Array2D[np.float32]
@@ -49,6 +44,7 @@ class GridData:
     DATA_FILE_TYPE: ClassVar[str] = "Grid"
     VERSION: ClassVar[Version] = LATEST_VERSION_V4
 
+
     def __init__(
         self,
         *,
@@ -63,16 +59,7 @@ class GridData:
         name: str = "UNKNOWN",
     ) -> None:
         num_bins = check_axis_length(
-            (
-                (0, flat_projection_xy.shape),
-                (1, flat_projection_xy.shape),
-                (0, projection_xy.shape),
-                (1, projection_xy.shape),
-                (0, projection_xz.shape),
-                (1, projection_xz.shape),
-                (0, projection_yz.shape),
-                (1, projection_yz.shape),
-            )
+            ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape))
         )
         num_frames = check_axis_length(
             ((2, flat_projection_xy.shape), (2, projection_xy.shape), (2, projection_xz.shape), (2, projection_yz.shape))
@@ -216,16 +203,7 @@ class GridData:
             raise ValueError(msg)
 
         num_bins = check_axis_length(
-            (
-                (0, flat_projection_xy.shape),
-                (1, flat_projection_xy.shape),
-                (0, projection_xy.shape),
-                (1, projection_xy.shape),
-                (0, projection_xz.shape),
-                (1, projection_xz.shape),
-                (0, projection_yz.shape),
-                (1, projection_yz.shape),
-            )
+            ((0, flat_projection_xy.shape), (1, flat_projection_xy.shape), (0, projection_xy.shape), (1, projection_xy.shape), (0, projection_xz.shape), (1, projection_xz.shape), (0, projection_yz.shape), (1, projection_yz.shape))
         )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
@@ -257,26 +235,6 @@ def load_v3(file: Hdf5File) -> GridData:
     projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float32))
     projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float32))
     projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float32))
-    num_bins = check_axis_length(
-        (
-            (0, flat_projection_xy.shape),
-            (1, flat_projection_xy.shape),
-            (0, projection_xy.shape),
-            (1, projection_xy.shape),
-            (0, projection_xz.shape),
-            (1, projection_xz.shape),
-            (0, projection_yz.shape),
-            (1, projection_yz.shape),
-        )
-    )
-    num_frames = check_axis_length(
-        (
-            (2, flat_projection_xy.shape),
-            (2, projection_xy.shape),
-            (2, projection_xz.shape),
-            (2, projection_yz.shape),
-        )
-    )
 
     return cls(
         disc_scale_length=disc_scale_length,
@@ -301,26 +259,6 @@ def load_v4(file: Hdf5File) -> GridData:
     projection_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xy", dtype=np.float64))
     projection_xz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_xz", dtype=np.float64))
     projection_yz = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "projection_yz", dtype=np.float64))
-    num_bins = check_axis_length(
-        (
-            (0, flat_projection_xy.shape),
-            (1, flat_projection_xy.shape),
-            (0, projection_xy.shape),
-            (1, projection_xy.shape),
-            (0, projection_xz.shape),
-            (1, projection_xz.shape),
-            (0, projection_yz.shape),
-            (1, projection_yz.shape),
-        )
-    )
-    num_frames = check_axis_length(
-        (
-            (2, flat_projection_xy.shape),
-            (2, projection_xy.shape),
-            (2, projection_xz.shape),
-            (2, projection_yz.shape),
-        )
-    )
 
     return cls(
         disc_scale_length=disc_scale_length,
@@ -339,3 +277,5 @@ _LOADERS: Mapping[int, _GridDataLoader] = {
     3: load_v3,
     4: load_v4,
 }
+
+

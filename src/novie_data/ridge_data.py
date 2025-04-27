@@ -1,33 +1,27 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
-from novie_data.novie_data_gen import (
+from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
-    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
     verify_array_is_3d,
-    verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_data.novie_data_gen import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D, Array2D, Array3D
 
     _Array3D_f32: TypeAlias = Array3D[np.float32]
     _Array2D_f32: TypeAlias = Array2D[np.float32]
@@ -50,6 +44,7 @@ class RidgeData:
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
     VERSION: ClassVar[Version] = LATEST_VERSION_V3
 
+
     def __init__(
         self,
         *,
@@ -62,9 +57,15 @@ class RidgeData:
         min_velocity: float = -255,
         name: str = "UNKNOWN",
     ) -> None:
-        num_frames = check_axis_length(((2, mass_density.shape), (2, number_density.shape)))
-        num_radial_bins = check_axis_length(((1, mass_density.shape), (1, number_density.shape)))
-        num_velocity_bins = check_axis_length(((0, mass_density.shape), (0, number_density.shape)))
+        num_frames = check_axis_length(
+            ((2, mass_density.shape), (2, number_density.shape))
+        )
+        num_radial_bins = check_axis_length(
+            ((1, mass_density.shape), (1, number_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, mass_density.shape), (0, number_density.shape))
+        )
         match completeness:
             case True:
                 completeness = np.ones((num_frames,), dtype=np.bool_)
@@ -204,22 +205,22 @@ class RidgeData:
             msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
             raise ValueError(msg)
 
-        num_radial_bins = check_axis_length(((1, mass_density.shape), (1, number_density.shape)))
-        num_velocity_bins = check_axis_length(((0, mass_density.shape), (0, number_density.shape)))
+        num_radial_bins = check_axis_length(
+            ((1, mass_density.shape), (1, number_density.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, mass_density.shape), (0, number_density.shape))
+        )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mass_density").write_direct(
-                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
             get_dataset_from_hdf5(file, "number_density").write_direct(
-                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
         log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
@@ -272,3 +273,5 @@ _LOADERS: Mapping[int, _RidgeDataLoader] = {
     2: load_v2,
     3: load_v3,
 }
+
+

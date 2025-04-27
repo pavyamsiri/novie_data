@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from novie_helpers.verifier import InconsistentArrayLengthError, UnexpectedArrayLengthError
 
 from novie_data.interface import NovieData
 from novie_data.perturber_data import PerturberData
-from novie_data.novie_data_gen.builtins._verifier import InconsistentArrayLengthError, UnexpectedArrayLengthError
 
 
 def test_protocol() -> None:

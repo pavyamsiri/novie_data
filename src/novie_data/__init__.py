@@ -10,6 +10,7 @@ from .ridge_data import RidgeData
 from .snail_data import SnailData
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
+from .velocity_grid import VelocityGridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 
@@ -24,6 +25,7 @@ __all__ = [
     "SnapshotData",
     "SolarCircleData",
     "SpiralArmCoverageData",
+    "VelocityGridData",
     "WrinkleData",
     "WrinkleResidualsData",
 ]

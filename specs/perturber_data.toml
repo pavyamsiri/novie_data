@@ -1,0 +1,25 @@
+[general]
+name = "Perturber"
+
+[versions.2-0-0]
+[versions.2-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+
+[versions.2-0-0.datasets]
+position = { dtype = "f32", shape = "(3, n)" }
+velocity = { dtype = "f32", shape = "(3, n)" }
+mass = { dtype = "f32", shape = "(n,)" }
+
+[versions.2-0-0.fields]
+num_frames = { type = "int", value = "n" }
+
+[versions.3-0-0]
+[versions.3-0-0.attrs]
+
+[versions.3-0-0.datasets]
+position = { dtype = "f64", shape = "(3, n)" }
+velocity = { dtype = "f64", shape = "(3, n)" }
+mass = { dtype = "f64", shape = "(n,)" }
+completeness = { dtype = "b8", shape = "(n,)", default = "one" }
+
+[versions.3-0-0.fields]

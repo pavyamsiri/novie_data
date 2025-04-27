@@ -1,0 +1,30 @@
+[general]
+name = "Ridge"
+
+[versions.2-0-0]
+[versions.2-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+# Extents
+min_radius = { dtype = "f64", default = "0.0" }
+max_radius = { dtype = "f64", default = "12.0" }
+min_velocity = { dtype = "f64", default = "-255.0" }
+max_velocity = { dtype = "f64", default = "255.0" }
+
+[versions.2-0-0.datasets]
+mass_density = { dtype = "f32", shape = "(num_velocity_bins, num_radial_bins, num_frames)" }
+number_density = { dtype = "f32", shape = "(num_velocity_bins, num_radial_bins, num_frames)" }
+
+[versions.2-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_radial_bins = { type = "int", value = "num_radial_bins" }
+num_velocity_bins = { type = "int", value = "num_velocity_bins" }
+
+[versions.3-0-0]
+[versions.3-0-0.attrs]
+
+[versions.3-0-0.datasets]
+mass_density = { dtype = "f64", shape = "(num_velocity_bins, num_radial_bins, num_frames)" }
+number_density = { dtype = "f64", shape = "(num_velocity_bins, num_radial_bins, num_frames)" }
+completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
+
+[versions.3-0-0.fields]

@@ -1,0 +1,23 @@
+[general]
+name = "Snapshot"
+
+[versions.0-0-0]
+[versions.0-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+
+[versions.0-0-0.datasets]
+codes = { dtype = "u32", shape = "(n,)" }
+times = { dtype = "f32", shape = "(n,)" }
+
+[versions.0-0-0.fields]
+num_frames = { type = "int", value = "n" }
+
+[versions.1-0-0]
+[versions.1-0-0.attrs]
+
+[versions.1-0-0.datasets]
+codes = { dtype = "u16", shape = "(n,)" }
+times = { dtype = "f64", shape = "(n,)" }
+completeness = { dtype = "b8", shape = "(n,)", default = "one" }
+
+[versions.1-0-0.fields]

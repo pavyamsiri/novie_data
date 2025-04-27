@@ -1,0 +1,34 @@
+[general]
+name = "WrinkleResiduals"
+
+[versions.3-0-0]
+[versions.3-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+metric_name = { dtype = "str", default = "UNSET" }
+
+[versions.3-0-0.datasets]
+metric = { dtype = "f32", shape = "(num_bins, num_frames, num_locations)" }
+summary = { dtype = "f32", shape = "(num_frames, num_locations)" }
+bin_values = { dtype = "f32", shape = "(num_bins,)" }
+
+[versions.3-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_bins = { type = "int", value = "num_bins" }
+num_locations = { type = "int", value = "num_locations" }
+
+[versions.4-0-0]
+[versions.4-0-0.attrs]
+
+[versions.4-0-0.datasets]
+metric = { dtype = "f64", shape = "(num_bins, num_frames, num_locations)" }
+summary = { dtype = "f64", shape = "(num_frames, num_locations)" }
+bin_values = { dtype = "f64", shape = "(num_bins,)" }
+
+[versions.4-0-0.fields]
+
+[versions.5-0-0]
+[versions.5-0-0.attrs]
+omega = { dtype = "f64", default = "0.0" }
+
+[versions.5-0-0.datasets]
+[versions.5-0-0.fields]

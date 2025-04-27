@@ -1,0 +1,13 @@
+[general]
+name = "SolarCircle"
+
+[versions.0-1-0]
+[versions.0-1-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+solar_radius = { dtype = "f64", default = "8" }
+omega = { dtype = "f64", default = "0" }
+
+[versions.0-1-0.datasets]
+
+[versions.0-1-0.fields]
+

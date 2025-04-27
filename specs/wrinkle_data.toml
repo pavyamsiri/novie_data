@@ -1,0 +1,41 @@
+[general]
+name = "Wrinkle"
+
+[versions.3-0-0]
+[versions.3-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+distance_error = { dtype = "f64", default = "0.0" }
+# Momentum binning
+min_lz = { dtype = "f64", default = "0.0" }
+max_lz = { dtype = "f64", default = "255.0" }
+# Filter info
+sphere_radius = { dtype = "f64", default = "2.0" }
+
+[versions.3-0-0.datasets]
+angular_momentum = { dtype = "f32", shape = "(num_momentum_bins,)" }
+mean_radial_velocity = { dtype = "f32", shape = "(num_momentum_bins, num_frames, num_locations)" }
+mean_radial_velocity_error = { dtype = "f32", shape = "(num_momentum_bins, num_frames, num_locations)" }
+
+[versions.3-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_momentum_bins = { type = "int", value = "num_momentum_bins" }
+num_locations = { type = "int", value = "num_locations" }
+
+[versions.4-0-0]
+[versions.4-0-0.attrs]
+
+[versions.4-0-0.datasets]
+angular_momentum = { dtype = "f64", shape = "(num_momentum_bins,)" }
+mean_radial_velocity = { dtype = "f64", shape = "(num_momentum_bins, num_frames, num_locations)" }
+mean_radial_velocity_error = { dtype = "f64", shape = "(num_momentum_bins, num_frames, num_locations)" }
+completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
+
+[versions.4-0-0.fields]
+
+
+[versions.5-0-0]
+[versions.5-0-0.attrs]
+omega = { dtype = "f64", default = "0.0" }
+
+[versions.5-0-0.datasets]
+[versions.5-0-0.fields]

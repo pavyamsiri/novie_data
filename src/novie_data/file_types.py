@@ -12,10 +12,10 @@ from novie_data.solar_circle_data import SolarCircleData
 from .arm_coverage_data import SpiralArmCoverageData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
+from .grid_data import GridData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
 from .snail_data import SnailData
-from .surface_density_data import GridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 

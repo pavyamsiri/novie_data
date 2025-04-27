@@ -143,7 +143,7 @@ class WrinkleData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
         return data
 
     @classmethod

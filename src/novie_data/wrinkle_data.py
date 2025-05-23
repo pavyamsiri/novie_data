@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,15 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array1D_f32: TypeAlias = Array1D[np.float32]
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array1D_f64: TypeAlias = Array1D[np.float64]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V3 = Version("3.0.0")
 LATEST_VERSION_V4 = Version("4.0.0")
@@ -51,10 +44,10 @@ class WrinkleData:
     def __init__(
         self,
         *,
-        angular_momentum: _Array1D_f64,
-        mean_radial_velocity: _Array3D_f64,
-        mean_radial_velocity_error: _Array3D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        angular_momentum: Array1D[np.float64],
+        mean_radial_velocity: Array3D[np.float64],
+        mean_radial_velocity_error: Array3D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         distance_error: float = 0,
         max_lz: float = 255,
         min_lz: float = 0,
@@ -88,10 +81,10 @@ class WrinkleData:
         self.name: str = name
         self.omega: float = omega
         self.sphere_radius: float = sphere_radius
-        self.angular_momentum: _Array1D_f64 = angular_momentum
-        self.completeness: _Array1D_b8 = completeness
-        self.mean_radial_velocity: _Array3D_f64 = mean_radial_velocity
-        self.mean_radial_velocity_error: _Array3D_f64 = mean_radial_velocity_error
+        self.angular_momentum: Array1D[np.float64] = angular_momentum
+        self.completeness: Array1D[np.bool_] = completeness
+        self.mean_radial_velocity: Array3D[np.float64] = mean_radial_velocity
+        self.mean_radial_velocity_error: Array3D[np.float64] = mean_radial_velocity_error
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -121,10 +114,10 @@ class WrinkleData:
         num_locations: int,
         num_momentum_bins: int,
     ) -> Self:
-        angular_momentum: _Array1D_f64 = np.zeros((num_momentum_bins,), dtype=np.float64)
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        mean_radial_velocity: _Array3D_f64 = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
-        mean_radial_velocity_error: _Array3D_f64 = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
+        angular_momentum: Array1D[np.float64] = np.zeros((num_momentum_bins,), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        mean_radial_velocity: Array3D[np.float64] = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
+        mean_radial_velocity_error: Array3D[np.float64] = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
         return cls(
             angular_momentum=angular_momentum,
             completeness=completeness,
@@ -180,11 +173,42 @@ class WrinkleData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        angular_momentum: Array1D[np.float64],
+        distance_error: float,
+        max_lz: float,
+        min_lz: float,
+        name: str,
+        omega: float,
+        sphere_radius: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= distance_error == get_float_attr_from_hdf5(file, "distance_error")
+            is_compatible &= max_lz == get_float_attr_from_hdf5(file, "max_lz")
+            is_compatible &= min_lz == get_float_attr_from_hdf5(file, "min_lz")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            is_compatible &= sphere_radius == get_float_attr_from_hdf5(file, "sphere_radius")
+            file_angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64))
+            is_compatible &= np.array_equal(file_angular_momentum, angular_momentum, equal_nan=True)
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
         *,
-        angular_momentum: _Array1D_f64,
+        angular_momentum: Array1D[np.float64],
         distance_error: float,
         max_lz: float,
         min_lz: float,
@@ -194,7 +218,7 @@ class WrinkleData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -216,12 +240,12 @@ class WrinkleData:
         path: Path,
         frame: int,
         *,
-        mean_radial_velocity: _Array2D_f64,
-        mean_radial_velocity_error: _Array2D_f64,
+        mean_radial_velocity: Array2D[np.float64],
+        mean_radial_velocity_error: Array2D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_locations = check_axis_length(

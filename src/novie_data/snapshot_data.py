@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -19,13 +19,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D
+    from optype.numpy import Array1D
 
-    _Array1D_u32: TypeAlias = Array1D[np.uint32]
-    _Array1D_f32: TypeAlias = Array1D[np.float32]
-    _Array1D_u16: TypeAlias = Array1D[np.uint16]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array1D_f64: TypeAlias = Array1D[np.float64]
 
 LATEST_VERSION_V0 = Version("0.0.0")
 LATEST_VERSION_V1 = Version("1.0.0")
@@ -46,9 +41,9 @@ class SnapshotData:
     def __init__(
         self,
         *,
-        codes: _Array1D_u16,
-        times: _Array1D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        codes: Array1D[np.uint16],
+        times: Array1D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
         n = check_axis_length(
@@ -64,9 +59,9 @@ class SnapshotData:
         assert completeness is not bool
         self.num_frames: int = n
         self.name: str = name
-        self.codes: _Array1D_u16 = codes
-        self.completeness: _Array1D_b8 = completeness
-        self.times: _Array1D_f64 = times
+        self.codes: Array1D[np.uint16] = codes
+        self.completeness: Array1D[np.bool_] = completeness
+        self.times: Array1D[np.float64] = times
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -82,9 +77,9 @@ class SnapshotData:
 
     @classmethod
     def empty(cls, *, n: int) -> Self:
-        codes: _Array1D_u16 = np.zeros((n,), dtype=np.uint16)
-        completeness: _Array1D_b8 = np.zeros((n,), dtype=np.bool_)
-        times: _Array1D_f64 = np.zeros((n,), dtype=np.float64)
+        codes: Array1D[np.uint16] = np.zeros((n,), dtype=np.uint16)
+        completeness: Array1D[np.bool_] = np.zeros((n,), dtype=np.bool_)
+        times: Array1D[np.float64] = np.zeros((n,), dtype=np.float64)
         return cls(
             codes=codes,
             completeness=completeness,
@@ -133,10 +128,23 @@ class SnapshotData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(cls, path: Path, *, name: str) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+        return is_compatible
+
+    @classmethod
     def save_init(cls, path: Path, *, name: str) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -155,7 +163,7 @@ class SnapshotData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)

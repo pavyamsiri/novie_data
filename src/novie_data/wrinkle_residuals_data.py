@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,14 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array1D_f32: TypeAlias = Array1D[np.float32]
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array1D_f64: TypeAlias = Array1D[np.float64]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V3 = Version("3.0.0")
 LATEST_VERSION_V4 = Version("4.0.0")
@@ -50,9 +44,9 @@ class WrinkleResidualsData:
     def __init__(
         self,
         *,
-        bin_values: _Array1D_f64,
-        metric: _Array3D_f64,
-        summary: _Array2D_f64,
+        bin_values: Array1D[np.float64],
+        metric: Array3D[np.float64],
+        summary: Array2D[np.float64],
         metric_name: str = "UNSET",
         name: str = "UNKNOWN",
         omega: float = 0,
@@ -72,9 +66,9 @@ class WrinkleResidualsData:
         self.metric_name: str = metric_name
         self.name: str = name
         self.omega: float = omega
-        self.bin_values: _Array1D_f64 = bin_values
-        self.metric: _Array3D_f64 = metric
-        self.summary: _Array2D_f64 = summary
+        self.bin_values: Array1D[np.float64] = bin_values
+        self.metric: Array3D[np.float64] = metric
+        self.summary: Array2D[np.float64] = summary
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -94,9 +88,9 @@ class WrinkleResidualsData:
 
     @classmethod
     def empty(cls, *, num_bins: int, num_frames: int, num_locations: int) -> Self:
-        bin_values: _Array1D_f64 = np.zeros((num_bins,), dtype=np.float64)
-        metric: _Array3D_f64 = np.zeros((num_bins, num_frames, num_locations), dtype=np.float64)
-        summary: _Array2D_f64 = np.zeros((num_frames, num_locations), dtype=np.float64)
+        bin_values: Array1D[np.float64] = np.zeros((num_bins,), dtype=np.float64)
+        metric: Array3D[np.float64] = np.zeros((num_bins, num_frames, num_locations), dtype=np.float64)
+        summary: Array2D[np.float64] = np.zeros((num_frames, num_locations), dtype=np.float64)
         return cls(
             bin_values=bin_values,
             metric=metric,
@@ -145,6 +139,31 @@ class WrinkleResidualsData:
             _ = file.create_dataset("metric", data=self.metric)
             _ = file.create_dataset("summary", data=self.summary)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+
+    @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        bin_values: Array1D[np.float64],
+        metric_name: str,
+        name: str,
+        omega: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= metric_name == get_str_attr_from_hdf5(file, "metric_name")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            file_bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64))
+            is_compatible &= np.array_equal(file_bin_values, bin_values, equal_nan=True)
+        return is_compatible
 
 
 

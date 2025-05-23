@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,13 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array3D, Array4D
+    from optype.numpy import Array1D, Array3D, Array4D
 
-    _Array4D_f32: TypeAlias = Array4D[np.float32]
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array4D_f64: TypeAlias = Array4D[np.float64]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
 
 LATEST_VERSION_V4 = Version("4.0.0")
 LATEST_VERSION_V5 = Version("5.0.0")
@@ -49,10 +44,10 @@ class SnailData:
     def __init__(
         self,
         *,
-        azimuthal_velocity: _Array4D_f64,
-        radial_velocity: _Array4D_f64,
-        surface_density: _Array4D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        azimuthal_velocity: Array4D[np.float64],
+        radial_velocity: Array4D[np.float64],
+        surface_density: Array4D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         max_height: float = 1,
         max_velocity: float = 60,
         name: str = "UNKNOWN",
@@ -88,10 +83,10 @@ class SnailData:
         self.name: str = name
         self.omega: float = omega
         self.sphere_radius: float = sphere_radius
-        self.azimuthal_velocity: _Array4D_f64 = azimuthal_velocity
-        self.completeness: _Array1D_b8 = completeness
-        self.radial_velocity: _Array4D_f64 = radial_velocity
-        self.surface_density: _Array4D_f64 = surface_density
+        self.azimuthal_velocity: Array4D[np.float64] = azimuthal_velocity
+        self.completeness: Array1D[np.bool_] = completeness
+        self.radial_velocity: Array4D[np.float64] = radial_velocity
+        self.surface_density: Array4D[np.float64] = surface_density
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -122,10 +117,10 @@ class SnailData:
         num_locations: int,
         num_velocity_bins: int,
     ) -> Self:
-        azimuthal_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        radial_velocity: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
-        surface_density: _Array4D_f64 = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        azimuthal_velocity: Array4D[np.float64] = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        radial_velocity: Array4D[np.float64] = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+        surface_density: Array4D[np.float64] = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
         return cls(
             azimuthal_velocity=azimuthal_velocity,
             completeness=completeness,
@@ -180,6 +175,32 @@ class SnailData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        max_height: float,
+        max_velocity: float,
+        name: str,
+        omega: float,
+        sphere_radius: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= max_height == get_float_attr_from_hdf5(file, "max_height")
+            is_compatible &= max_velocity == get_float_attr_from_hdf5(file, "max_velocity")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            is_compatible &= sphere_radius == get_float_attr_from_hdf5(file, "sphere_radius")
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -192,7 +213,7 @@ class SnailData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -210,13 +231,13 @@ class SnailData:
         path: Path,
         frame: int,
         *,
-        azimuthal_velocity: _Array3D_f64,
-        radial_velocity: _Array3D_f64,
-        surface_density: _Array3D_f64,
+        azimuthal_velocity: Array3D[np.float64],
+        radial_velocity: Array3D[np.float64],
+        surface_density: Array3D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_height_bins = check_axis_length(

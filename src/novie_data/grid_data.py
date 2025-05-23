@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,13 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V3 = Version("3.0.0")
 LATEST_VERSION_V4 = Version("4.0.0")
@@ -48,11 +43,11 @@ class GridData:
     def __init__(
         self,
         *,
-        flat_projection_xy: _Array3D_f64,
-        projection_xy: _Array3D_f64,
-        projection_xz: _Array3D_f64,
-        projection_yz: _Array3D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        flat_projection_xy: Array3D[np.float64],
+        projection_xy: Array3D[np.float64],
+        projection_xz: Array3D[np.float64],
+        projection_yz: Array3D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         disc_scale_length: float = 1,
         disc_scale_mass: float = 1,
         extent: float = 1,
@@ -78,11 +73,11 @@ class GridData:
         self.disc_scale_mass: float = disc_scale_mass
         self.extent: float = extent
         self.name: str = name
-        self.completeness: _Array1D_b8 = completeness
-        self.flat_projection_xy: _Array3D_f64 = flat_projection_xy
-        self.projection_xy: _Array3D_f64 = projection_xy
-        self.projection_xz: _Array3D_f64 = projection_xz
-        self.projection_yz: _Array3D_f64 = projection_yz
+        self.completeness: Array1D[np.bool_] = completeness
+        self.flat_projection_xy: Array3D[np.float64] = flat_projection_xy
+        self.projection_xy: Array3D[np.float64] = projection_xy
+        self.projection_xz: Array3D[np.float64] = projection_xz
+        self.projection_yz: Array3D[np.float64] = projection_yz
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -104,11 +99,11 @@ class GridData:
 
     @classmethod
     def empty(cls, *, num_bins: int, num_frames: int) -> Self:
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        flat_projection_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        projection_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        projection_xz: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        projection_yz: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        flat_projection_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_xz: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        projection_yz: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         return cls(
             completeness=completeness,
             flat_projection_xy=flat_projection_xy,
@@ -164,6 +159,30 @@ class GridData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        disc_scale_length: float,
+        disc_scale_mass: float,
+        extent: float,
+        name: str,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= disc_scale_length == get_float_attr_from_hdf5(file, "disc_scale_length")
+            is_compatible &= disc_scale_mass == get_float_attr_from_hdf5(file, "disc_scale_mass")
+            is_compatible &= extent == get_float_attr_from_hdf5(file, "extent")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -175,7 +194,7 @@ class GridData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -192,14 +211,14 @@ class GridData:
         path: Path,
         frame: int,
         *,
-        flat_projection_xy: _Array2D_f64,
-        projection_xy: _Array2D_f64,
-        projection_xz: _Array2D_f64,
-        projection_yz: _Array2D_f64,
+        flat_projection_xy: Array2D[np.float64],
+        projection_xy: Array2D[np.float64],
+        projection_xz: Array2D[np.float64],
+        projection_yz: Array2D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_bins = check_axis_length(

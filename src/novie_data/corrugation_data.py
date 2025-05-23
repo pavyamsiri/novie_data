@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -22,17 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D, Array4D
+    from optype.numpy import Array1D, Array2D, Array3D, Array4D
 
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array4D_f32: TypeAlias = Array4D[np.float32]
-    _Array1D_f32: TypeAlias = Array1D[np.float32]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
-    _Array4D_f64: TypeAlias = Array4D[np.float64]
-    _Array1D_f64: TypeAlias = Array1D[np.float64]
 
 LATEST_VERSION_V3 = Version("3.0.0")
 LATEST_VERSION_V4 = Version("4.0.0")
@@ -54,11 +45,11 @@ class CorrugationData:
     def __init__(
         self,
         *,
-        mean_height: _Array3D_f64,
-        mean_height_error: _Array3D_f64,
-        projection_rz: _Array4D_f64,
-        radii: _Array1D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        mean_height: Array3D[np.float64],
+        mean_height_error: Array3D[np.float64],
+        projection_rz: Array4D[np.float64],
+        radii: Array1D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         cutoff_frequency: float = 0,
         distance_error: float = 0,
         inner_radius: float = 0,
@@ -106,11 +97,11 @@ class CorrugationData:
         self.name: str = name
         self.omega: float = omega
         self.outer_radius: float = outer_radius
-        self.completeness: _Array1D_b8 = completeness
-        self.mean_height: _Array3D_f64 = mean_height
-        self.mean_height_error: _Array3D_f64 = mean_height_error
-        self.projection_rz: _Array4D_f64 = projection_rz
-        self.radii: _Array1D_f64 = radii
+        self.completeness: Array1D[np.bool_] = completeness
+        self.mean_height: Array3D[np.float64] = mean_height
+        self.mean_height_error: Array3D[np.float64] = mean_height_error
+        self.projection_rz: Array4D[np.float64] = projection_rz
+        self.radii: Array1D[np.float64] = radii
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -148,11 +139,11 @@ class CorrugationData:
         num_locations: int,
         num_radial_bins: int,
     ) -> Self:
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        mean_height: _Array3D_f64 = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
-        mean_height_error: _Array3D_f64 = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
-        projection_rz: _Array4D_f64 = np.zeros((num_height_bins, num_radial_bins, num_frames, num_locations), dtype=np.float64)
-        radii: _Array1D_f64 = np.zeros((num_radial_bins,), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        mean_height: Array3D[np.float64] = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        mean_height_error: Array3D[np.float64] = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        projection_rz: Array4D[np.float64] = np.zeros((num_height_bins, num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        radii: Array1D[np.float64] = np.zeros((num_radial_bins,), dtype=np.float64)
         return cls(
             completeness=completeness,
             mean_height=mean_height,
@@ -215,6 +206,47 @@ class CorrugationData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        cutoff_frequency: float,
+        distance_error: float,
+        inner_radius: float,
+        max_height: float,
+        max_longitude_deg: float,
+        max_radius: float,
+        min_longitude_deg: float,
+        min_radius: float,
+        name: str,
+        omega: float,
+        outer_radius: float,
+        radii: Array1D[np.float64],
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= cutoff_frequency == get_float_attr_from_hdf5(file, "cutoff_frequency")
+            is_compatible &= distance_error == get_float_attr_from_hdf5(file, "distance_error")
+            is_compatible &= inner_radius == get_float_attr_from_hdf5(file, "inner_radius")
+            is_compatible &= max_height == get_float_attr_from_hdf5(file, "max_height")
+            is_compatible &= max_longitude_deg == get_float_attr_from_hdf5(file, "max_longitude_deg")
+            is_compatible &= max_radius == get_float_attr_from_hdf5(file, "max_radius")
+            is_compatible &= min_longitude_deg == get_float_attr_from_hdf5(file, "min_longitude_deg")
+            is_compatible &= min_radius == get_float_attr_from_hdf5(file, "min_radius")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            is_compatible &= outer_radius == get_float_attr_from_hdf5(file, "outer_radius")
+            file_radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+            is_compatible &= np.array_equal(file_radii, radii, equal_nan=True)
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -230,11 +262,11 @@ class CorrugationData:
         name: str,
         omega: float,
         outer_radius: float,
-        radii: _Array1D_f64,
+        radii: Array1D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -261,13 +293,13 @@ class CorrugationData:
         path: Path,
         frame: int,
         *,
-        mean_height: _Array2D_f64,
-        mean_height_error: _Array2D_f64,
-        projection_rz: _Array3D_f64,
+        mean_height: Array2D[np.float64],
+        mean_height_error: Array2D[np.float64],
+        projection_rz: Array3D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_height_bins = check_axis_length(

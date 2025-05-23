@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -22,15 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array3D_u32: TypeAlias = Array3D[np.uint32]
-    _Array2D_u32: TypeAlias = Array2D[np.uint32]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V2 = Version("2.0.0")
 LATEST_VERSION_V3 = Version("3.0.0")
@@ -53,10 +46,10 @@ class SpiralArmCoverageData:
         self,
         *,
         arm_names: tuple[str, ...],
-        covered_arm_normalised_densities: _Array3D_f64,
-        num_covered_arm_pixels: _Array3D_u32,
-        num_total_arm_pixels: _Array3D_u32,
-        completeness: _Array1D_b8 | bool = True,
+        covered_arm_normalised_densities: Array3D[np.float64],
+        num_covered_arm_pixels: Array3D[np.uint32],
+        num_total_arm_pixels: Array3D[np.uint32],
+        completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
         omega: float = 0,
     ) -> None:
@@ -83,10 +76,10 @@ class SpiralArmCoverageData:
         self.name: str = name
         self.omega: float = omega
         self.arm_names: tuple[str, ...] = arm_names
-        self.completeness: _Array1D_b8 = completeness
-        self.covered_arm_normalised_densities: _Array3D_f64 = covered_arm_normalised_densities
-        self.num_covered_arm_pixels: _Array3D_u32 = num_covered_arm_pixels
-        self.num_total_arm_pixels: _Array3D_u32 = num_total_arm_pixels
+        self.completeness: Array1D[np.bool_] = completeness
+        self.covered_arm_normalised_densities: Array3D[np.float64] = covered_arm_normalised_densities
+        self.num_covered_arm_pixels: Array3D[np.uint32] = num_covered_arm_pixels
+        self.num_total_arm_pixels: Array3D[np.uint32] = num_total_arm_pixels
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -110,10 +103,10 @@ class SpiralArmCoverageData:
     @classmethod
     def empty(cls, *, num_arms: int, num_frames: int, num_locations: int) -> Self:
         arm_names: tuple[str, ...] = tuple("UNSET" for _ in range(num_arms))
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        covered_arm_normalised_densities: _Array3D_f64 = np.zeros((num_locations, num_arms, num_frames), dtype=np.float64)
-        num_covered_arm_pixels: _Array3D_u32 = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
-        num_total_arm_pixels: _Array3D_u32 = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        covered_arm_normalised_densities: Array3D[np.float64] = np.zeros((num_locations, num_arms, num_frames), dtype=np.float64)
+        num_covered_arm_pixels: Array3D[np.uint32] = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
+        num_total_arm_pixels: Array3D[np.uint32] = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
         return cls(
             arm_names=arm_names,
             completeness=completeness,
@@ -167,6 +160,29 @@ class SpiralArmCoverageData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        arm_names: tuple[str, ...],
+        name: str,
+        omega: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            file_arm_names = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "arm_names", dtype=np.str_))
+            is_compatible &= np.array_equal(file_arm_names, arm_names, equal_nan=True)
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -177,7 +193,7 @@ class SpiralArmCoverageData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -195,13 +211,13 @@ class SpiralArmCoverageData:
         path: Path,
         frame: int,
         *,
-        covered_arm_normalised_densities: _Array2D_f64,
-        num_covered_arm_pixels: _Array2D_u32,
-        num_total_arm_pixels: _Array2D_u32,
+        covered_arm_normalised_densities: Array2D[np.float64],
+        num_covered_arm_pixels: Array2D[np.uint32],
+        num_total_arm_pixels: Array2D[np.uint32],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_arms = check_axis_length(

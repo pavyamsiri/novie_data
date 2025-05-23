@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -20,13 +20,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D
+    from optype.numpy import Array1D, Array2D
 
-    _Array1D_f32: TypeAlias = Array1D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array1D_f64: TypeAlias = Array1D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V2 = Version("2.0.0")
 LATEST_VERSION_V3 = Version("3.0.0")
@@ -47,10 +42,10 @@ class PerturberData:
     def __init__(
         self,
         *,
-        mass: _Array1D_f64,
-        position: _Array2D_f64,
-        velocity: _Array2D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        mass: Array1D[np.float64],
+        position: Array2D[np.float64],
+        velocity: Array2D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
         _ = check_axis_length(
@@ -69,10 +64,10 @@ class PerturberData:
         assert completeness is not bool
         self.num_frames: int = n
         self.name: str = name
-        self.completeness: _Array1D_b8 = completeness
-        self.mass: _Array1D_f64 = mass
-        self.position: _Array2D_f64 = position
-        self.velocity: _Array2D_f64 = velocity
+        self.completeness: Array1D[np.bool_] = completeness
+        self.mass: Array1D[np.float64] = mass
+        self.position: Array2D[np.float64] = position
+        self.velocity: Array2D[np.float64] = velocity
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -89,10 +84,10 @@ class PerturberData:
 
     @classmethod
     def empty(cls, *, n: int) -> Self:
-        completeness: _Array1D_b8 = np.zeros((n,), dtype=np.bool_)
-        mass: _Array1D_f64 = np.zeros((n,), dtype=np.float64)
-        position: _Array2D_f64 = np.zeros((3, n), dtype=np.float64)
-        velocity: _Array2D_f64 = np.zeros((3, n), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((n,), dtype=np.bool_)
+        mass: Array1D[np.float64] = np.zeros((n,), dtype=np.float64)
+        position: Array2D[np.float64] = np.zeros((3, n), dtype=np.float64)
+        velocity: Array2D[np.float64] = np.zeros((3, n), dtype=np.float64)
         return cls(
             completeness=completeness,
             mass=mass,
@@ -143,10 +138,23 @@ class PerturberData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(cls, path: Path, *, name: str) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+        return is_compatible
+
+    @classmethod
     def save_init(cls, path: Path, *, name: str) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -161,12 +169,12 @@ class PerturberData:
         frame: int,
         *,
         mass: float,
-        position: _Array1D_f64,
-        velocity: _Array1D_f64,
+        position: Array1D[np.float64],
+        velocity: Array1D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         _ = check_axis_length(

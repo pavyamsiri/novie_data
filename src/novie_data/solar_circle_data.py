@@ -99,6 +99,28 @@ class SolarCircleData:
             file.attrs.create("solar_radius", self.solar_radius, dtype=np.float64)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
+    @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        name: str,
+        omega: float,
+        solar_radius: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+            is_compatible &= solar_radius == get_float_attr_from_hdf5(file, "solar_radius")
+        return is_compatible
+
 
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,13 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array3D_f32: TypeAlias = Array3D[np.float32]
-    _Array2D_f32: TypeAlias = Array2D[np.float32]
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V2 = Version("2.0.0")
 LATEST_VERSION_V3 = Version("3.0.0")
@@ -48,9 +43,9 @@ class RidgeData:
     def __init__(
         self,
         *,
-        mass_density: _Array3D_f64,
-        number_density: _Array3D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        mass_density: Array3D[np.float64],
+        number_density: Array3D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         max_radius: float = 12,
         max_velocity: float = 255,
         min_radius: float = 0,
@@ -82,9 +77,9 @@ class RidgeData:
         self.min_radius: float = min_radius
         self.min_velocity: float = min_velocity
         self.name: str = name
-        self.completeness: _Array1D_b8 = completeness
-        self.mass_density: _Array3D_f64 = mass_density
-        self.number_density: _Array3D_f64 = number_density
+        self.completeness: Array1D[np.bool_] = completeness
+        self.mass_density: Array3D[np.float64] = mass_density
+        self.number_density: Array3D[np.float64] = number_density
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -112,9 +107,9 @@ class RidgeData:
         num_radial_bins: int,
         num_velocity_bins: int,
     ) -> Self:
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        mass_density: _Array3D_f64 = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
-        number_density: _Array3D_f64 = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        mass_density: Array3D[np.float64] = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
+        number_density: Array3D[np.float64] = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
         return cls(
             completeness=completeness,
             mass_density=mass_density,
@@ -167,6 +162,32 @@ class RidgeData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        max_radius: float,
+        max_velocity: float,
+        min_radius: float,
+        min_velocity: float,
+        name: str,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= max_radius == get_float_attr_from_hdf5(file, "max_radius")
+            is_compatible &= max_velocity == get_float_attr_from_hdf5(file, "max_velocity")
+            is_compatible &= min_radius == get_float_attr_from_hdf5(file, "min_radius")
+            is_compatible &= min_velocity == get_float_attr_from_hdf5(file, "min_velocity")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -179,7 +200,7 @@ class RidgeData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -197,12 +218,12 @@ class RidgeData:
         path: Path,
         frame: int,
         *,
-        mass_density: _Array2D_f64,
-        number_density: _Array2D_f64,
+        mass_density: Array2D[np.float64],
+        number_density: Array2D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_radial_bins = check_axis_length(

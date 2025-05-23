@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
@@ -21,11 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D
+    from optype.numpy import Array1D, Array2D, Array3D
 
-    _Array1D_b8: TypeAlias = Array1D[np.bool_]
-    _Array3D_f64: TypeAlias = Array3D[np.float64]
-    _Array2D_f64: TypeAlias = Array2D[np.float64]
 
 LATEST_VERSION_V1 = Version("1.0.0")
 LATEST_VERSION_V2 = Version("2.0.0")
@@ -46,14 +43,14 @@ class VelocityGridData:
     def __init__(
         self,
         *,
-        vphi_xy: _Array3D_f64,
-        vr_xy: _Array3D_f64,
-        completeness: _Array1D_b8 | bool = True,
+        vphi_xy: Array3D[np.float64],
+        vr_xy: Array3D[np.float64],
+        completeness: Array1D[np.bool_] | bool = True,
         extent: float = 1,
         name: str = "UNKNOWN",
         omega: float = 0,
-        vz_xy: _Array3D_f64 | bool = False,
-        z_xy: _Array3D_f64 | bool = False,
+        vz_xy: Array3D[np.float64] | bool = False,
+        z_xy: Array3D[np.float64] | bool = False,
     ) -> None:
         num_bins = check_axis_length(
             ((0, vphi_xy.shape), (1, vphi_xy.shape), (0, vr_xy.shape), (1, vr_xy.shape))
@@ -90,11 +87,11 @@ class VelocityGridData:
         self.extent: float = extent
         self.name: str = name
         self.omega: float = omega
-        self.completeness: _Array1D_b8 = completeness
-        self.vphi_xy: _Array3D_f64 = vphi_xy
-        self.vr_xy: _Array3D_f64 = vr_xy
-        self.vz_xy: _Array3D_f64 = vz_xy
-        self.z_xy: _Array3D_f64 = z_xy
+        self.completeness: Array1D[np.bool_] = completeness
+        self.vphi_xy: Array3D[np.float64] = vphi_xy
+        self.vr_xy: Array3D[np.float64] = vr_xy
+        self.vz_xy: Array3D[np.float64] = vz_xy
+        self.z_xy: Array3D[np.float64] = z_xy
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -115,11 +112,11 @@ class VelocityGridData:
 
     @classmethod
     def empty(cls, *, num_bins: int, num_frames: int) -> Self:
-        completeness: _Array1D_b8 = np.zeros((num_frames,), dtype=np.bool_)
-        vphi_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        vr_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        vz_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
-        z_xy: _Array3D_f64 = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
+        vphi_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        vr_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        vz_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        z_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         return cls(
             completeness=completeness,
             vphi_xy=vphi_xy,
@@ -174,6 +171,28 @@ class VelocityGridData:
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
+    def is_compatible(
+        cls,
+        path: Path,
+        *,
+        extent: float,
+        name: str,
+        omega: float,
+    ) -> bool:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        cls.migrate(path)
+        is_compatible: bool = True
+        with Hdf5File(path, "r") as file:
+            is_compatible &= extent == get_float_attr_from_hdf5(file, "extent")
+            is_compatible &= name == get_str_attr_from_hdf5(file, "name")
+            is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
+        return is_compatible
+
+    @classmethod
     def save_init(
         cls,
         path: Path,
@@ -184,7 +203,7 @@ class VelocityGridData:
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -200,14 +219,14 @@ class VelocityGridData:
         path: Path,
         frame: int,
         *,
-        vphi_xy: _Array2D_f64,
-        vr_xy: _Array2D_f64,
-        vz_xy: _Array2D_f64,
-        z_xy: _Array2D_f64,
+        vphi_xy: Array2D[np.float64],
+        vr_xy: Array2D[np.float64],
+        vz_xy: Array2D[np.float64],
+        z_xy: Array2D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't save initial data to {cls.__name__} as it doesn't exist!"
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         num_bins = check_axis_length(

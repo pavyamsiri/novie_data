@@ -1,33 +1,27 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
 from novie_helpers import (
     check_axis_length,
-    get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
-    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
     verify_array_is_2d,
     verify_array_is_3d,
-    verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D, Array2D, Array3D
 
 
 LATEST_VERSION_V3 = Version("3.0.0")
@@ -46,6 +40,7 @@ class WrinkleResidualsData:
     DATA_FILE_TYPE: ClassVar[str] = "WrinkleResiduals"
     VERSION: ClassVar[Version] = LATEST_VERSION_V5
 
+
     def __init__(
         self,
         *,
@@ -56,9 +51,15 @@ class WrinkleResidualsData:
         name: str = "UNKNOWN",
         omega: float = 0,
     ) -> None:
-        num_bins = check_axis_length(((0, bin_values.shape), (0, metric.shape)))
-        num_frames = check_axis_length(((1, metric.shape), (0, summary.shape)))
-        num_locations = check_axis_length(((2, metric.shape), (1, summary.shape)))
+        num_bins = check_axis_length(
+            ((0, bin_values.shape), (0, metric.shape))
+        )
+        num_frames = check_axis_length(
+            ((1, metric.shape), (0, summary.shape))
+        )
+        num_locations = check_axis_length(
+            ((2, metric.shape), (1, summary.shape))
+        )
         self.num_bins: int = num_bins
         self.num_frames: int = num_frames
         self.num_locations: int = num_locations
@@ -88,12 +89,8 @@ class WrinkleResidualsData:
     @classmethod
     def empty(cls, *, num_bins: int, num_frames: int, num_locations: int) -> Self:
         bin_values: Array1D[np.float64] = np.zeros((num_bins,), dtype=np.float64)
-        metric: Array3D[np.float64] = np.zeros(
-            (num_bins, num_frames, num_locations), dtype=np.float64
-        )
-        summary: Array2D[np.float64] = np.zeros(
-            (num_frames, num_locations), dtype=np.float64
-        )
+        metric: Array3D[np.float64] = np.zeros((num_bins, num_frames, num_locations), dtype=np.float64)
+        summary: Array2D[np.float64] = np.zeros((num_frames, num_locations), dtype=np.float64)
         return cls(
             bin_values=bin_values,
             metric=metric,
@@ -111,11 +108,7 @@ class WrinkleResidualsData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
         return data
 
     @classmethod
@@ -145,11 +138,7 @@ class WrinkleResidualsData:
             _ = file.create_dataset("bin_values", data=self.bin_values)
             _ = file.create_dataset("metric", data=self.metric)
             _ = file.create_dataset("summary", data=self.summary)
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            cls.__name__,
-            path.absolute(),
-        )
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
     def is_compatible(
@@ -163,9 +152,7 @@ class WrinkleResidualsData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = (
-                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
-            )
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -174,26 +161,20 @@ class WrinkleResidualsData:
             is_compatible &= metric_name == get_str_attr_from_hdf5(file, "metric_name")
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
             is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
-            file_bin_values = verify_array_is_1d(
-                read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64)
-            )
+            file_bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64))
             is_compatible &= np.array_equal(file_bin_values, bin_values, equal_nan=True)
         return is_compatible
+
+
 
 
 def load_v3(file: Hdf5File) -> WrinkleResidualsData:
     cls = WrinkleResidualsData
     metric_name = get_str_attr_from_hdf5(file, "metric_name")
     name = get_str_attr_from_hdf5(file, "name")
-    bin_values = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float32)
-    )
-    metric = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float32)
-    )
-    summary = verify_array_is_2d(
-        read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float32)
-    )
+    bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float32))
+    metric = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float32))
+    summary = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float32))
 
     return cls(
         metric_name=metric_name,
@@ -208,15 +189,9 @@ def load_v4(file: Hdf5File) -> WrinkleResidualsData:
     cls = WrinkleResidualsData
     metric_name = get_str_attr_from_hdf5(file, "metric_name")
     name = get_str_attr_from_hdf5(file, "name")
-    bin_values = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64)
-    )
-    metric = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float64)
-    )
-    summary = verify_array_is_2d(
-        read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float64)
-    )
+    bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64))
+    metric = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float64))
+    summary = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float64))
 
     return cls(
         metric_name=metric_name,
@@ -232,15 +207,9 @@ def load_v5(file: Hdf5File) -> WrinkleResidualsData:
     metric_name = get_str_attr_from_hdf5(file, "metric_name")
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
-    bin_values = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64)
-    )
-    metric = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float64)
-    )
-    summary = verify_array_is_2d(
-        read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float64)
-    )
+    bin_values = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "bin_values", dtype=np.float64))
+    metric = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "metric", dtype=np.float64))
+    summary = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "summary", dtype=np.float64))
 
     return cls(
         metric_name=metric_name,
@@ -257,3 +226,5 @@ _LOADERS: Mapping[int, _WrinkleResidualsDataLoader] = {
     4: load_v4,
     5: load_v5,
 }
+
+

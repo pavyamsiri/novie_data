@@ -1,32 +1,27 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
-    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
     verify_array_is_3d,
-    verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
     from pathlib import Path
-    from novie_helpers import Array1D, Array2D, Array3D, Array4D
+
+    from novie_helpers import Array1D, Array2D, Array3D
 
 
 LATEST_VERSION_V1 = Version("1.0.0")
@@ -44,6 +39,7 @@ class VelocityGridData:
     DATA_FILE_TYPE: ClassVar[str] = "VelocityGrid"
     VERSION: ClassVar[Version] = LATEST_VERSION_V2
 
+
     def __init__(
         self,
         *,
@@ -59,7 +55,9 @@ class VelocityGridData:
         num_bins = check_axis_length(
             ((0, vphi_xy.shape), (1, vphi_xy.shape), (0, vr_xy.shape), (1, vr_xy.shape))
         )
-        num_frames = check_axis_length(((2, vphi_xy.shape), (2, vr_xy.shape)))
+        num_frames = check_axis_length(
+            ((2, vphi_xy.shape), (2, vr_xy.shape))
+        )
         match completeness:
             case True:
                 completeness = np.ones((num_frames,), dtype=np.bool_)
@@ -105,9 +103,7 @@ class VelocityGridData:
         equality &= self.extent == other.extent
         equality &= self.name == other.name
         equality &= self.omega == other.omega
-        equality &= np.array_equal(
-            self.completeness, other.completeness, equal_nan=True
-        )
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
         equality &= np.array_equal(self.vphi_xy, other.vphi_xy, equal_nan=True)
         equality &= np.array_equal(self.vr_xy, other.vr_xy, equal_nan=True)
         equality &= np.array_equal(self.vz_xy, other.vz_xy, equal_nan=True)
@@ -117,18 +113,10 @@ class VelocityGridData:
     @classmethod
     def empty(cls, *, num_bins: int, num_frames: int) -> Self:
         completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
-        vphi_xy: Array3D[np.float64] = np.zeros(
-            (num_bins, num_bins, num_frames), dtype=np.float64
-        )
-        vr_xy: Array3D[np.float64] = np.zeros(
-            (num_bins, num_bins, num_frames), dtype=np.float64
-        )
-        vz_xy: Array3D[np.float64] = np.zeros(
-            (num_bins, num_bins, num_frames), dtype=np.float64
-        )
-        z_xy: Array3D[np.float64] = np.zeros(
-            (num_bins, num_bins, num_frames), dtype=np.float64
-        )
+        vphi_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        vr_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        vz_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        z_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         return cls(
             completeness=completeness,
             vphi_xy=vphi_xy,
@@ -148,11 +136,7 @@ class VelocityGridData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
         return data
 
     @classmethod
@@ -184,11 +168,7 @@ class VelocityGridData:
             _ = file.create_dataset("vr_xy", data=self.vr_xy)
             _ = file.create_dataset("vz_xy", data=self.vz_xy)
             _ = file.create_dataset("z_xy", data=self.z_xy)
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            cls.__name__,
-            path.absolute(),
-        )
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
     def is_compatible(
@@ -201,9 +181,7 @@ class VelocityGridData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = (
-                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
-            )
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -233,11 +211,7 @@ class VelocityGridData:
             file.attrs.modify("extent", extent)
             file.attrs.modify("name", name)
             file.attrs.modify("omega", omega)
-        log.info(
-            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
     @classmethod
     def save_frame(
@@ -264,31 +238,18 @@ class VelocityGridData:
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "vphi_xy").write_direct(
-                np.asarray(vphi_xy, dtype=np.float64).reshape((num_bins, num_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(vphi_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
             get_dataset_from_hdf5(file, "vr_xy").write_direct(
-                np.asarray(vr_xy, dtype=np.float64).reshape((num_bins, num_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(vr_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
             get_dataset_from_hdf5(file, "vz_xy").write_direct(
-                np.asarray(vz_xy, dtype=np.float64).reshape((num_bins, num_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(vz_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
             get_dataset_from_hdf5(file, "z_xy").write_direct(
-                np.asarray(z_xy, dtype=np.float64).reshape((num_bins, num_bins)),
-                np.s_[:, :],
-                np.s_[:, :, frame],
+                np.asarray(z_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
-        log.info(
-            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            frame,
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v1(file: Hdf5File) -> VelocityGridData:
@@ -296,15 +257,9 @@ def load_v1(file: Hdf5File) -> VelocityGridData:
     extent = get_float_attr_from_hdf5(file, "extent")
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
-    completeness = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
-    )
-    vphi_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "vphi_xy", dtype=np.float64)
-    )
-    vr_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "vr_xy", dtype=np.float64)
-    )
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    vphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "vphi_xy", dtype=np.float64))
+    vr_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "vr_xy", dtype=np.float64))
 
     return cls(
         extent=extent,
@@ -321,21 +276,11 @@ def load_v2(file: Hdf5File) -> VelocityGridData:
     extent = get_float_attr_from_hdf5(file, "extent")
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
-    completeness = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
-    )
-    vphi_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "vphi_xy", dtype=np.float64)
-    )
-    vr_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "vr_xy", dtype=np.float64)
-    )
-    vz_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "vz_xy", dtype=np.float64)
-    )
-    z_xy = verify_array_is_3d(
-        read_dataset_from_hdf5_with_dtype(file, "z_xy", dtype=np.float64)
-    )
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    vphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "vphi_xy", dtype=np.float64))
+    vr_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "vr_xy", dtype=np.float64))
+    vz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "vz_xy", dtype=np.float64))
+    z_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "z_xy", dtype=np.float64))
 
     return cls(
         extent=extent,
@@ -353,3 +298,5 @@ _LOADERS: Mapping[int, _VelocityGridDataLoader] = {
     1: load_v1,
     2: load_v2,
 }
+
+

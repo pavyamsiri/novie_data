@@ -1,33 +1,25 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
 
 import numpy as np
 from h5py import File as Hdf5File
-from packaging.version import Version
-from typing_extensions import override
-
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
-    get_float_attr_from_hdf5,
-    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
-    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
-    verify_array_is_2d,
-    verify_array_is_3d,
-    verify_array_is_4d,
 )
+from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array1D, Array2D, Array3D, Array4D
+    from novie_helpers import Array1D
 
 
 LATEST_VERSION_V0 = Version("0.0.0")
@@ -45,6 +37,7 @@ class SnapshotData:
     DATA_FILE_TYPE: ClassVar[str] = "Snapshot"
     VERSION: ClassVar[Version] = LATEST_VERSION_V1
 
+
     def __init__(
         self,
         *,
@@ -53,7 +46,9 @@ class SnapshotData:
         completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
-        n = check_axis_length(((0, codes.shape), (0, times.shape)))
+        n = check_axis_length(
+            ((0, codes.shape), (0, times.shape))
+        )
         match completeness:
             case True:
                 completeness = np.ones((n,), dtype=np.bool_)
@@ -76,9 +71,7 @@ class SnapshotData:
         equality &= self.num_frames == other.num_frames
         equality &= self.name == other.name
         equality &= np.array_equal(self.codes, other.codes, equal_nan=True)
-        equality &= np.array_equal(
-            self.completeness, other.completeness, equal_nan=True
-        )
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
         equality &= np.array_equal(self.times, other.times, equal_nan=True)
         return bool(equality)
 
@@ -104,11 +97,7 @@ class SnapshotData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info(
-            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
         return data
 
     @classmethod
@@ -136,19 +125,13 @@ class SnapshotData:
             _ = file.create_dataset("codes", data=self.codes)
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("times", data=self.times)
-        log.info(
-            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            cls.__name__,
-            path.absolute(),
-        )
+        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
     def is_compatible(cls, path: Path, *, name: str) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = (
-                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
-            )
+            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -167,11 +150,7 @@ class SnapshotData:
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             file.attrs.modify("name", name)
-        log.info(
-            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
     @classmethod
     def save_frame(
@@ -198,23 +177,14 @@ class SnapshotData:
             get_dataset_from_hdf5(file, "times").write_direct(
                 np.asarray(times, dtype=np.float64).reshape(1), np.s_[0], np.s_[frame]
             )
-        log.info(
-            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
-            frame,
-            cls.__name__,
-            path,
-        )
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v0(file: Hdf5File) -> SnapshotData:
     cls = SnapshotData
     name = get_str_attr_from_hdf5(file, "name")
-    codes = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint32)
-    )
-    times = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float32)
-    )
+    codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint32))
+    times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float32))
 
     return cls(
         name=name,
@@ -226,15 +196,9 @@ def load_v0(file: Hdf5File) -> SnapshotData:
 def load_v1(file: Hdf5File) -> SnapshotData:
     cls = SnapshotData
     name = get_str_attr_from_hdf5(file, "name")
-    codes = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16)
-    )
-    completeness = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
-    )
-    times = verify_array_is_1d(
-        read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64)
-    )
+    codes = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "codes", dtype=np.uint16))
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    times = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "times", dtype=np.float64))
 
     return cls(
         name=name,
@@ -248,3 +212,5 @@ _LOADERS: Mapping[int, _SnapshotDataLoader] = {
     0: load_v0,
     1: load_v1,
 }
+
+

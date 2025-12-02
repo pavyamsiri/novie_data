@@ -1,27 +1,33 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
+    verify_array_is_2d,
     verify_array_is_3d,
+    verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from optype.numpy import Array1D, Array2D, Array3D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V2 = Version("2.0.0")
@@ -38,7 +44,6 @@ class _RidgeDataLoader(Protocol):
 class RidgeData:
     DATA_FILE_TYPE: ClassVar[str] = "Ridge"
     VERSION: ClassVar[Version] = LATEST_VERSION_V3
-
 
     def __init__(
         self,
@@ -94,9 +99,15 @@ class RidgeData:
         equality &= self.min_radius == other.min_radius
         equality &= self.min_velocity == other.min_velocity
         equality &= self.name == other.name
-        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
-        equality &= np.array_equal(self.mass_density, other.mass_density, equal_nan=True)
-        equality &= np.array_equal(self.number_density, other.number_density, equal_nan=True)
+        equality &= np.array_equal(
+            self.completeness, other.completeness, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.mass_density, other.mass_density, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.number_density, other.number_density, equal_nan=True
+        )
         return bool(equality)
 
     @classmethod
@@ -108,8 +119,12 @@ class RidgeData:
         num_velocity_bins: int,
     ) -> Self:
         completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
-        mass_density: Array3D[np.float64] = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
-        number_density: Array3D[np.float64] = np.zeros((num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64)
+        mass_density: Array3D[np.float64] = np.zeros(
+            (num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64
+        )
+        number_density: Array3D[np.float64] = np.zeros(
+            (num_velocity_bins, num_radial_bins, num_frames), dtype=np.float64
+        )
         return cls(
             completeness=completeness,
             mass_density=mass_density,
@@ -127,7 +142,11 @@ class RidgeData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
         return data
 
     @classmethod
@@ -159,7 +178,11 @@ class RidgeData:
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("mass_density", data=self.mass_density)
             _ = file.create_dataset("number_density", data=self.number_density)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path.absolute(),
+        )
 
     @classmethod
     def is_compatible(
@@ -174,16 +197,22 @@ class RidgeData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            msg = (
+                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            )
             raise ValueError(msg)
 
         cls.migrate(path)
         is_compatible: bool = True
         with Hdf5File(path, "r") as file:
             is_compatible &= max_radius == get_float_attr_from_hdf5(file, "max_radius")
-            is_compatible &= max_velocity == get_float_attr_from_hdf5(file, "max_velocity")
+            is_compatible &= max_velocity == get_float_attr_from_hdf5(
+                file, "max_velocity"
+            )
             is_compatible &= min_radius == get_float_attr_from_hdf5(file, "min_radius")
-            is_compatible &= min_velocity == get_float_attr_from_hdf5(file, "min_velocity")
+            is_compatible &= min_velocity == get_float_attr_from_hdf5(
+                file, "min_velocity"
+            )
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
         return is_compatible
 
@@ -210,7 +239,11 @@ class RidgeData:
             file.attrs.modify("min_radius", min_radius)
             file.attrs.modify("min_velocity", min_velocity)
             file.attrs.modify("name", name)
-        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
 
     @classmethod
     def save_frame(
@@ -238,12 +271,25 @@ class RidgeData:
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mass_density").write_direct(
-                np.asarray(mass_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(mass_density, dtype=np.float64).reshape(
+                    (num_velocity_bins, num_radial_bins)
+                ),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
             get_dataset_from_hdf5(file, "number_density").write_direct(
-                np.asarray(number_density, dtype=np.float64).reshape((num_velocity_bins, num_radial_bins)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(number_density, dtype=np.float64).reshape(
+                    (num_velocity_bins, num_radial_bins)
+                ),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
-        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
+        log.info(
+            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            frame,
+            cls.__name__,
+            path,
+        )
 
 
 def load_v2(file: Hdf5File) -> RidgeData:
@@ -253,8 +299,12 @@ def load_v2(file: Hdf5File) -> RidgeData:
     min_radius = get_float_attr_from_hdf5(file, "min_radius")
     min_velocity = get_float_attr_from_hdf5(file, "min_velocity")
     name = get_str_attr_from_hdf5(file, "name")
-    mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float32))
-    number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float32))
+    mass_density = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float32)
+    )
+    number_density = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float32)
+    )
 
     return cls(
         max_radius=max_radius,
@@ -274,9 +324,15 @@ def load_v3(file: Hdf5File) -> RidgeData:
     min_radius = get_float_attr_from_hdf5(file, "min_radius")
     min_velocity = get_float_attr_from_hdf5(file, "min_velocity")
     name = get_str_attr_from_hdf5(file, "name")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mass_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float64))
-    number_density = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float64))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mass_density = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mass_density", dtype=np.float64)
+    )
+    number_density = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "number_density", dtype=np.float64)
+    )
 
     return cls(
         max_radius=max_radius,
@@ -294,5 +350,3 @@ _LOADERS: Mapping[int, _RidgeDataLoader] = {
     2: load_v2,
     3: load_v3,
 }
-
-

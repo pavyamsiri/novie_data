@@ -1,21 +1,33 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
+    check_axis_length,
+    get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
+    read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
+    verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V0 = Version("0.1.0")

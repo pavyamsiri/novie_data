@@ -1,28 +1,33 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
     get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
+    verify_array_is_2d,
     verify_array_is_3d,
+    verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from optype.numpy import Array1D, Array2D, Array3D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V2 = Version("2.0.0")
@@ -41,7 +46,6 @@ class SpiralArmCoverageData:
     DATA_FILE_TYPE: ClassVar[str] = "SpiralArmCoverage"
     VERSION: ClassVar[Version] = LATEST_VERSION_V4
 
-
     def __init__(
         self,
         *,
@@ -54,13 +58,26 @@ class SpiralArmCoverageData:
         omega: float = 0,
     ) -> None:
         num_arms = check_axis_length(
-            ((0, (len(arm_names),)), (1, covered_arm_normalised_densities.shape), (1, num_covered_arm_pixels.shape), (1, num_total_arm_pixels.shape))
+            (
+                (0, (len(arm_names),)),
+                (1, covered_arm_normalised_densities.shape),
+                (1, num_covered_arm_pixels.shape),
+                (1, num_total_arm_pixels.shape),
+            )
         )
         num_frames = check_axis_length(
-            ((2, covered_arm_normalised_densities.shape), (2, num_covered_arm_pixels.shape), (2, num_total_arm_pixels.shape))
+            (
+                (2, covered_arm_normalised_densities.shape),
+                (2, num_covered_arm_pixels.shape),
+                (2, num_total_arm_pixels.shape),
+            )
         )
         num_locations = check_axis_length(
-            ((0, covered_arm_normalised_densities.shape), (0, num_covered_arm_pixels.shape), (0, num_total_arm_pixels.shape))
+            (
+                (0, covered_arm_normalised_densities.shape),
+                (0, num_covered_arm_pixels.shape),
+                (0, num_total_arm_pixels.shape),
+            )
         )
         match completeness:
             case True:
@@ -77,7 +94,9 @@ class SpiralArmCoverageData:
         self.omega: float = omega
         self.arm_names: tuple[str, ...] = arm_names
         self.completeness: Array1D[np.bool_] = completeness
-        self.covered_arm_normalised_densities: Array3D[np.float64] = covered_arm_normalised_densities
+        self.covered_arm_normalised_densities: Array3D[np.float64] = (
+            covered_arm_normalised_densities
+        )
         self.num_covered_arm_pixels: Array3D[np.uint32] = num_covered_arm_pixels
         self.num_total_arm_pixels: Array3D[np.uint32] = num_total_arm_pixels
 
@@ -94,19 +113,35 @@ class SpiralArmCoverageData:
         equality &= len(self.arm_names) == len(other.arm_names) and all(
             x == y for x, y in zip(self.arm_names, other.arm_names, strict=True)
         )
-        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
-        equality &= np.array_equal(self.covered_arm_normalised_densities, other.covered_arm_normalised_densities, equal_nan=True)
-        equality &= np.array_equal(self.num_covered_arm_pixels, other.num_covered_arm_pixels, equal_nan=True)
-        equality &= np.array_equal(self.num_total_arm_pixels, other.num_total_arm_pixels, equal_nan=True)
+        equality &= np.array_equal(
+            self.completeness, other.completeness, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.covered_arm_normalised_densities,
+            other.covered_arm_normalised_densities,
+            equal_nan=True,
+        )
+        equality &= np.array_equal(
+            self.num_covered_arm_pixels, other.num_covered_arm_pixels, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.num_total_arm_pixels, other.num_total_arm_pixels, equal_nan=True
+        )
         return bool(equality)
 
     @classmethod
     def empty(cls, *, num_arms: int, num_frames: int, num_locations: int) -> Self:
         arm_names: tuple[str, ...] = tuple("UNSET" for _ in range(num_arms))
         completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
-        covered_arm_normalised_densities: Array3D[np.float64] = np.zeros((num_locations, num_arms, num_frames), dtype=np.float64)
-        num_covered_arm_pixels: Array3D[np.uint32] = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
-        num_total_arm_pixels: Array3D[np.uint32] = np.zeros((num_locations, num_arms, num_frames), dtype=np.uint32)
+        covered_arm_normalised_densities: Array3D[np.float64] = np.zeros(
+            (num_locations, num_arms, num_frames), dtype=np.float64
+        )
+        num_covered_arm_pixels: Array3D[np.uint32] = np.zeros(
+            (num_locations, num_arms, num_frames), dtype=np.uint32
+        )
+        num_total_arm_pixels: Array3D[np.uint32] = np.zeros(
+            (num_locations, num_arms, num_frames), dtype=np.uint32
+        )
         return cls(
             arm_names=arm_names,
             completeness=completeness,
@@ -126,7 +161,11 @@ class SpiralArmCoverageData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
         return data
 
     @classmethod
@@ -154,10 +193,21 @@ class SpiralArmCoverageData:
             file.attrs.create("omega", self.omega, dtype=np.float64)
             _ = file.create_dataset("arm_names", data=self.arm_names)
             _ = file.create_dataset("completeness", data=self.completeness)
-            _ = file.create_dataset("covered_arm_normalised_densities", data=self.covered_arm_normalised_densities)
-            _ = file.create_dataset("num_covered_arm_pixels", data=self.num_covered_arm_pixels)
-            _ = file.create_dataset("num_total_arm_pixels", data=self.num_total_arm_pixels)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+            _ = file.create_dataset(
+                "covered_arm_normalised_densities",
+                data=self.covered_arm_normalised_densities,
+            )
+            _ = file.create_dataset(
+                "num_covered_arm_pixels", data=self.num_covered_arm_pixels
+            )
+            _ = file.create_dataset(
+                "num_total_arm_pixels", data=self.num_total_arm_pixels
+            )
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path.absolute(),
+        )
 
     @classmethod
     def is_compatible(
@@ -170,7 +220,9 @@ class SpiralArmCoverageData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            msg = (
+                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            )
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -178,7 +230,9 @@ class SpiralArmCoverageData:
         with Hdf5File(path, "r") as file:
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
             is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
-            file_arm_names = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "arm_names", dtype=np.str_))
+            file_arm_names = verify_array_is_1d(
+                read_dataset_from_hdf5_with_dtype(file, "arm_names", dtype=np.str_)
+            )
             is_compatible &= np.array_equal(file_arm_names, arm_names, equal_nan=True)
         return is_compatible
 
@@ -203,7 +257,11 @@ class SpiralArmCoverageData:
             get_dataset_from_hdf5(file, "arm_names").write_direct(
                 np.asarray(arm_names, dtype=np.object_), np.s_[:], np.s_[:]
             )
-        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
 
     @classmethod
     def save_frame(
@@ -221,40 +279,79 @@ class SpiralArmCoverageData:
             raise ValueError(msg)
 
         num_arms = check_axis_length(
-            ((1, covered_arm_normalised_densities.shape), (1, num_covered_arm_pixels.shape), (1, num_total_arm_pixels.shape))
+            (
+                (1, covered_arm_normalised_densities.shape),
+                (1, num_covered_arm_pixels.shape),
+                (1, num_total_arm_pixels.shape),
+            )
         )
         num_locations = check_axis_length(
-            ((0, covered_arm_normalised_densities.shape), (0, num_covered_arm_pixels.shape), (0, num_total_arm_pixels.shape))
+            (
+                (0, covered_arm_normalised_densities.shape),
+                (0, num_covered_arm_pixels.shape),
+                (0, num_total_arm_pixels.shape),
+            )
         )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "completeness").write_direct(
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
-            get_dataset_from_hdf5(file, "covered_arm_normalised_densities").write_direct(
-                np.asarray(covered_arm_normalised_densities, dtype=np.float64).reshape((num_locations, num_arms)), np.s_[:, :], np.s_[:, :, frame]
+            get_dataset_from_hdf5(
+                file, "covered_arm_normalised_densities"
+            ).write_direct(
+                np.asarray(covered_arm_normalised_densities, dtype=np.float64).reshape(
+                    (num_locations, num_arms)
+                ),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
             get_dataset_from_hdf5(file, "num_covered_arm_pixels").write_direct(
-                np.asarray(num_covered_arm_pixels, dtype=np.uint32).reshape((num_locations, num_arms)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(num_covered_arm_pixels, dtype=np.uint32).reshape(
+                    (num_locations, num_arms)
+                ),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
             get_dataset_from_hdf5(file, "num_total_arm_pixels").write_direct(
-                np.asarray(num_total_arm_pixels, dtype=np.uint32).reshape((num_locations, num_arms)), np.s_[:, :], np.s_[:, :, frame]
+                np.asarray(num_total_arm_pixels, dtype=np.uint32).reshape(
+                    (num_locations, num_arms)
+                ),
+                np.s_[:, :],
+                np.s_[:, :, frame],
             )
-        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
+        log.info(
+            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            frame,
+            cls.__name__,
+            path,
+        )
 
 
 def load_v2(file: Hdf5File) -> SpiralArmCoverageData:
     cls = SpiralArmCoverageData
     name = get_str_attr_from_hdf5(file, "name")
     arm_names = get_string_sequence_from_hdf5(file, "arm_names")
-    covered_arm_normalised_densities = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "covered_arm_normalised_densities", dtype=np.float32))
-    num_covered_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_covered_arm_pixels", dtype=np.uint32))
-    num_total_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32))
+    covered_arm_normalised_densities = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "covered_arm_normalised_densities", dtype=np.float32
+        )
+    )
+    num_covered_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "num_covered_arm_pixels", dtype=np.uint32
+        )
+    )
+    num_total_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32)
+    )
 
     return cls(
         name=name,
         arm_names=arm_names,
-        covered_arm_normalised_densities=covered_arm_normalised_densities.astype(np.float64),
+        covered_arm_normalised_densities=covered_arm_normalised_densities.astype(
+            np.float64
+        ),
         num_covered_arm_pixels=num_covered_arm_pixels,
         num_total_arm_pixels=num_total_arm_pixels,
     )
@@ -264,10 +361,22 @@ def load_v3(file: Hdf5File) -> SpiralArmCoverageData:
     cls = SpiralArmCoverageData
     name = get_str_attr_from_hdf5(file, "name")
     arm_names = get_string_sequence_from_hdf5(file, "arm_names")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    covered_arm_normalised_densities = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "covered_arm_normalised_densities", dtype=np.float64))
-    num_covered_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_covered_arm_pixels", dtype=np.uint32))
-    num_total_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    covered_arm_normalised_densities = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "covered_arm_normalised_densities", dtype=np.float64
+        )
+    )
+    num_covered_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "num_covered_arm_pixels", dtype=np.uint32
+        )
+    )
+    num_total_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32)
+    )
 
     return cls(
         name=name,
@@ -284,10 +393,22 @@ def load_v4(file: Hdf5File) -> SpiralArmCoverageData:
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
     arm_names = get_string_sequence_from_hdf5(file, "arm_names")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    covered_arm_normalised_densities = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "covered_arm_normalised_densities", dtype=np.float64))
-    num_covered_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_covered_arm_pixels", dtype=np.uint32))
-    num_total_arm_pixels = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    covered_arm_normalised_densities = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "covered_arm_normalised_densities", dtype=np.float64
+        )
+    )
+    num_covered_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "num_covered_arm_pixels", dtype=np.uint32
+        )
+    )
+    num_total_arm_pixels = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "num_total_arm_pixels", dtype=np.uint32)
+    )
 
     return cls(
         name=name,
@@ -305,5 +426,3 @@ _LOADERS: Mapping[int, _SpiralArmCoverageDataLoader] = {
     3: load_v3,
     4: load_v4,
 }
-
-

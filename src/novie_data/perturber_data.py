@@ -1,26 +1,33 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
+    get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
     verify_array_is_2d,
+    verify_array_is_3d,
+    verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from optype.numpy import Array1D, Array2D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V2 = Version("2.0.0")
@@ -38,7 +45,6 @@ class PerturberData:
     DATA_FILE_TYPE: ClassVar[str] = "Perturber"
     VERSION: ClassVar[Version] = LATEST_VERSION_V3
 
-
     def __init__(
         self,
         *,
@@ -48,9 +54,7 @@ class PerturberData:
         completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
-        _ = check_axis_length(
-            ((0, position.shape), (0, velocity.shape)), expected=3
-        )
+        _ = check_axis_length(((0, position.shape), (0, velocity.shape)), expected=3)
         n = check_axis_length(
             ((0, mass.shape), (1, position.shape), (1, velocity.shape))
         )
@@ -76,7 +80,9 @@ class PerturberData:
         equality = True
         equality &= self.num_frames == other.num_frames
         equality &= self.name == other.name
-        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(
+            self.completeness, other.completeness, equal_nan=True
+        )
         equality &= np.array_equal(self.mass, other.mass, equal_nan=True)
         equality &= np.array_equal(self.position, other.position, equal_nan=True)
         equality &= np.array_equal(self.velocity, other.velocity, equal_nan=True)
@@ -106,7 +112,11 @@ class PerturberData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
         return data
 
     @classmethod
@@ -135,13 +145,19 @@ class PerturberData:
             _ = file.create_dataset("mass", data=self.mass)
             _ = file.create_dataset("position", data=self.position)
             _ = file.create_dataset("velocity", data=self.velocity)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path.absolute(),
+        )
 
     @classmethod
     def is_compatible(cls, path: Path, *, name: str) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            msg = (
+                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            )
             raise ValueError(msg)
 
         cls.migrate(path)
@@ -160,7 +176,11 @@ class PerturberData:
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             file.attrs.modify("name", name)
-        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
 
     @classmethod
     def save_frame(
@@ -177,9 +197,7 @@ class PerturberData:
             msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
-        _ = check_axis_length(
-            ((0, position.shape), (0, velocity.shape)), expected=3
-        )
+        _ = check_axis_length(((0, position.shape), (0, velocity.shape)), expected=3)
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             get_dataset_from_hdf5(file, "completeness").write_direct(
@@ -189,20 +207,35 @@ class PerturberData:
                 np.asarray(mass, dtype=np.float64).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "position").write_direct(
-                np.asarray(position, dtype=np.float64).reshape((3,)), np.s_[:], np.s_[:, frame]
+                np.asarray(position, dtype=np.float64).reshape((3,)),
+                np.s_[:],
+                np.s_[:, frame],
             )
             get_dataset_from_hdf5(file, "velocity").write_direct(
-                np.asarray(velocity, dtype=np.float64).reshape((3,)), np.s_[:], np.s_[:, frame]
+                np.asarray(velocity, dtype=np.float64).reshape((3,)),
+                np.s_[:],
+                np.s_[:, frame],
             )
-        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
+        log.info(
+            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            frame,
+            cls.__name__,
+            path,
+        )
 
 
 def load_v2(file: Hdf5File) -> PerturberData:
     cls = PerturberData
     name = get_str_attr_from_hdf5(file, "name")
-    mass = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "mass", dtype=np.float32))
-    position = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "position", dtype=np.float32))
-    velocity = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=np.float32))
+    mass = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "mass", dtype=np.float32)
+    )
+    position = verify_array_is_2d(
+        read_dataset_from_hdf5_with_dtype(file, "position", dtype=np.float32)
+    )
+    velocity = verify_array_is_2d(
+        read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=np.float32)
+    )
 
     return cls(
         name=name,
@@ -215,10 +248,18 @@ def load_v2(file: Hdf5File) -> PerturberData:
 def load_v3(file: Hdf5File) -> PerturberData:
     cls = PerturberData
     name = get_str_attr_from_hdf5(file, "name")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mass = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "mass", dtype=np.float64))
-    position = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "position", dtype=np.float64))
-    velocity = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=np.float64))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mass = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "mass", dtype=np.float64)
+    )
+    position = verify_array_is_2d(
+        read_dataset_from_hdf5_with_dtype(file, "position", dtype=np.float64)
+    )
+    velocity = verify_array_is_2d(
+        read_dataset_from_hdf5_with_dtype(file, "velocity", dtype=np.float64)
+    )
 
     return cls(
         name=name,
@@ -233,5 +274,3 @@ _LOADERS: Mapping[int, _PerturberDataLoader] = {
     2: load_v2,
     3: load_v3,
 }
-
-

@@ -1,25 +1,30 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
+    verify_array_is_2d,
     verify_array_is_3d,
     verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from optype.numpy import Array1D, Array2D, Array3D, Array4D
@@ -40,7 +45,6 @@ class _CorrugationDataLoader(Protocol):
 class CorrugationData:
     DATA_FILE_TYPE: ClassVar[str] = "Corrugation"
     VERSION: ClassVar[Version] = LATEST_VERSION_V5
-
 
     def __init__(
         self,
@@ -63,16 +67,27 @@ class CorrugationData:
         outer_radius: float = 7,
     ) -> None:
         num_frames = check_axis_length(
-            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+            (
+                (1, mean_height.shape),
+                (1, mean_height_error.shape),
+                (2, projection_rz.shape),
+            )
         )
-        num_height_bins = check_axis_length(
-            ((0, projection_rz.shape),)
-        )
+        num_height_bins = check_axis_length(((0, projection_rz.shape),))
         num_locations = check_axis_length(
-            ((2, mean_height.shape), (2, mean_height_error.shape), (3, projection_rz.shape))
+            (
+                (2, mean_height.shape),
+                (2, mean_height_error.shape),
+                (3, projection_rz.shape),
+            )
         )
         num_radial_bins = check_axis_length(
-            ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape), (0, radii.shape))
+            (
+                (0, mean_height.shape),
+                (0, mean_height_error.shape),
+                (1, projection_rz.shape),
+                (0, radii.shape),
+            )
         )
         match completeness:
             case True:
@@ -123,10 +138,16 @@ class CorrugationData:
         equality &= self.name == other.name
         equality &= self.omega == other.omega
         equality &= self.outer_radius == other.outer_radius
-        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
+        equality &= np.array_equal(
+            self.completeness, other.completeness, equal_nan=True
+        )
         equality &= np.array_equal(self.mean_height, other.mean_height, equal_nan=True)
-        equality &= np.array_equal(self.mean_height_error, other.mean_height_error, equal_nan=True)
-        equality &= np.array_equal(self.projection_rz, other.projection_rz, equal_nan=True)
+        equality &= np.array_equal(
+            self.mean_height_error, other.mean_height_error, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.projection_rz, other.projection_rz, equal_nan=True
+        )
         equality &= np.array_equal(self.radii, other.radii, equal_nan=True)
         return bool(equality)
 
@@ -140,9 +161,16 @@ class CorrugationData:
         num_radial_bins: int,
     ) -> Self:
         completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
-        mean_height: Array3D[np.float64] = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
-        mean_height_error: Array3D[np.float64] = np.zeros((num_radial_bins, num_frames, num_locations), dtype=np.float64)
-        projection_rz: Array4D[np.float64] = np.zeros((num_height_bins, num_radial_bins, num_frames, num_locations), dtype=np.float64)
+        mean_height: Array3D[np.float64] = np.zeros(
+            (num_radial_bins, num_frames, num_locations), dtype=np.float64
+        )
+        mean_height_error: Array3D[np.float64] = np.zeros(
+            (num_radial_bins, num_frames, num_locations), dtype=np.float64
+        )
+        projection_rz: Array4D[np.float64] = np.zeros(
+            (num_height_bins, num_radial_bins, num_frames, num_locations),
+            dtype=np.float64,
+        )
         radii: Array1D[np.float64] = np.zeros((num_radial_bins,), dtype=np.float64)
         return cls(
             completeness=completeness,
@@ -163,7 +191,11 @@ class CorrugationData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
         return data
 
     @classmethod
@@ -187,13 +219,19 @@ class CorrugationData:
         with Hdf5File(path, "w") as file:
             file.attrs.create("type", str(cls.DATA_FILE_TYPE))
             file.attrs.create("version", str(cls.VERSION))
-            file.attrs.create("cutoff_frequency", self.cutoff_frequency, dtype=np.float64)
+            file.attrs.create(
+                "cutoff_frequency", self.cutoff_frequency, dtype=np.float64
+            )
             file.attrs.create("distance_error", self.distance_error, dtype=np.float64)
             file.attrs.create("inner_radius", self.inner_radius, dtype=np.float64)
             file.attrs.create("max_height", self.max_height, dtype=np.float64)
-            file.attrs.create("max_longitude_deg", self.max_longitude_deg, dtype=np.float64)
+            file.attrs.create(
+                "max_longitude_deg", self.max_longitude_deg, dtype=np.float64
+            )
             file.attrs.create("max_radius", self.max_radius, dtype=np.float64)
-            file.attrs.create("min_longitude_deg", self.min_longitude_deg, dtype=np.float64)
+            file.attrs.create(
+                "min_longitude_deg", self.min_longitude_deg, dtype=np.float64
+            )
             file.attrs.create("min_radius", self.min_radius, dtype=np.float64)
             file.attrs.create("name", str(self.name))
             file.attrs.create("omega", self.omega, dtype=np.float64)
@@ -203,7 +241,11 @@ class CorrugationData:
             _ = file.create_dataset("mean_height_error", data=self.mean_height_error)
             _ = file.create_dataset("projection_rz", data=self.projection_rz)
             _ = file.create_dataset("radii", data=self.radii)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path.absolute(),
+        )
 
     @classmethod
     def is_compatible(
@@ -225,24 +267,40 @@ class CorrugationData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            msg = (
+                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            )
             raise ValueError(msg)
 
         cls.migrate(path)
         is_compatible: bool = True
         with Hdf5File(path, "r") as file:
-            is_compatible &= cutoff_frequency == get_float_attr_from_hdf5(file, "cutoff_frequency")
-            is_compatible &= distance_error == get_float_attr_from_hdf5(file, "distance_error")
-            is_compatible &= inner_radius == get_float_attr_from_hdf5(file, "inner_radius")
+            is_compatible &= cutoff_frequency == get_float_attr_from_hdf5(
+                file, "cutoff_frequency"
+            )
+            is_compatible &= distance_error == get_float_attr_from_hdf5(
+                file, "distance_error"
+            )
+            is_compatible &= inner_radius == get_float_attr_from_hdf5(
+                file, "inner_radius"
+            )
             is_compatible &= max_height == get_float_attr_from_hdf5(file, "max_height")
-            is_compatible &= max_longitude_deg == get_float_attr_from_hdf5(file, "max_longitude_deg")
+            is_compatible &= max_longitude_deg == get_float_attr_from_hdf5(
+                file, "max_longitude_deg"
+            )
             is_compatible &= max_radius == get_float_attr_from_hdf5(file, "max_radius")
-            is_compatible &= min_longitude_deg == get_float_attr_from_hdf5(file, "min_longitude_deg")
+            is_compatible &= min_longitude_deg == get_float_attr_from_hdf5(
+                file, "min_longitude_deg"
+            )
             is_compatible &= min_radius == get_float_attr_from_hdf5(file, "min_radius")
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
             is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
-            is_compatible &= outer_radius == get_float_attr_from_hdf5(file, "outer_radius")
-            file_radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+            is_compatible &= outer_radius == get_float_attr_from_hdf5(
+                file, "outer_radius"
+            )
+            file_radii = verify_array_is_1d(
+                read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64)
+            )
             is_compatible &= np.array_equal(file_radii, radii, equal_nan=True)
         return is_compatible
 
@@ -283,9 +341,15 @@ class CorrugationData:
             file.attrs.modify("omega", omega)
             file.attrs.modify("outer_radius", outer_radius)
             get_dataset_from_hdf5(file, "radii").write_direct(
-                np.asarray(radii, dtype=np.float64).reshape(radii.shape), np.s_[:], np.s_[:]
+                np.asarray(radii, dtype=np.float64).reshape(radii.shape),
+                np.s_[:],
+                np.s_[:],
             )
-        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
 
     @classmethod
     def save_frame(
@@ -302,14 +366,20 @@ class CorrugationData:
             msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
             raise ValueError(msg)
 
-        num_height_bins = check_axis_length(
-            ((0, projection_rz.shape),)
-        )
+        num_height_bins = check_axis_length(((0, projection_rz.shape),))
         num_locations = check_axis_length(
-            ((1, mean_height.shape), (1, mean_height_error.shape), (2, projection_rz.shape))
+            (
+                (1, mean_height.shape),
+                (1, mean_height_error.shape),
+                (2, projection_rz.shape),
+            )
         )
         num_radial_bins = check_axis_length(
-            ((0, mean_height.shape), (0, mean_height_error.shape), (1, projection_rz.shape))
+            (
+                (0, mean_height.shape),
+                (0, mean_height_error.shape),
+                (1, projection_rz.shape),
+            )
         )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
@@ -317,15 +387,32 @@ class CorrugationData:
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mean_height").write_direct(
-                np.asarray(mean_height, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+                np.asarray(mean_height, dtype=np.float64).reshape(
+                    (num_radial_bins, num_locations)
+                ),
+                np.s_[:, :],
+                np.s_[:, frame, :],
             )
             get_dataset_from_hdf5(file, "mean_height_error").write_direct(
-                np.asarray(mean_height_error, dtype=np.float64).reshape((num_radial_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+                np.asarray(mean_height_error, dtype=np.float64).reshape(
+                    (num_radial_bins, num_locations)
+                ),
+                np.s_[:, :],
+                np.s_[:, frame, :],
             )
             get_dataset_from_hdf5(file, "projection_rz").write_direct(
-                np.asarray(projection_rz, dtype=np.float64).reshape((num_height_bins, num_radial_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+                np.asarray(projection_rz, dtype=np.float64).reshape(
+                    (num_height_bins, num_radial_bins, num_locations)
+                ),
+                np.s_[:, :, :],
+                np.s_[:, :, frame, :],
             )
-        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
+        log.info(
+            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            frame,
+            cls.__name__,
+            path,
+        )
 
 
 def load_v3(file: Hdf5File) -> CorrugationData:
@@ -340,10 +427,18 @@ def load_v3(file: Hdf5File) -> CorrugationData:
     min_radius = get_float_attr_from_hdf5(file, "min_radius")
     name = get_str_attr_from_hdf5(file, "name")
     outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
-    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float32))
-    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32))
-    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32))
-    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32))
+    mean_height = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float32)
+    )
+    mean_height_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float32)
+    )
+    projection_rz = verify_array_is_4d(
+        read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float32)
+    )
+    radii = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float32)
+    )
 
     return cls(
         cutoff_frequency=cutoff_frequency,
@@ -375,11 +470,21 @@ def load_v4(file: Hdf5File) -> CorrugationData:
     min_radius = get_float_attr_from_hdf5(file, "min_radius")
     name = get_str_attr_from_hdf5(file, "name")
     outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64))
-    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64))
-    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64))
-    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mean_height = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64)
+    )
+    mean_height_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64)
+    )
+    projection_rz = verify_array_is_4d(
+        read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64)
+    )
+    radii = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64)
+    )
 
     return cls(
         cutoff_frequency=cutoff_frequency,
@@ -413,11 +518,21 @@ def load_v5(file: Hdf5File) -> CorrugationData:
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
     outer_radius = get_float_attr_from_hdf5(file, "outer_radius")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mean_height = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64))
-    mean_height_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64))
-    projection_rz = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64))
-    radii = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64))
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mean_height = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height", dtype=np.float64)
+    )
+    mean_height_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(file, "mean_height_error", dtype=np.float64)
+    )
+    projection_rz = verify_array_is_4d(
+        read_dataset_from_hdf5_with_dtype(file, "projection_rz", dtype=np.float64)
+    )
+    radii = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "radii", dtype=np.float64)
+    )
 
     return cls(
         cutoff_frequency=cutoff_frequency,
@@ -444,5 +559,3 @@ _LOADERS: Mapping[int, _CorrugationDataLoader] = {
     4: load_v4,
     5: load_v5,
 }
-
-

@@ -1,27 +1,33 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeAlias
 
 import numpy as np
 from h5py import File as Hdf5File
+from packaging.version import Version
+from typing_extensions import override
+
 from novie_helpers import (
     check_axis_length,
     get_dataset_from_hdf5,
     get_file_version,
     get_float_attr_from_hdf5,
+    get_int_attr_from_hdf5,
     get_str_attr_from_hdf5,
+    get_string_sequence_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
     verify_array_is_1d,
+    verify_array_is_2d,
     verify_array_is_3d,
+    verify_array_is_4d,
 )
-from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from optype.numpy import Array1D, Array2D, Array3D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V3 = Version("3.0.0")
@@ -39,7 +45,6 @@ class _WrinkleDataLoader(Protocol):
 class WrinkleData:
     DATA_FILE_TYPE: ClassVar[str] = "Wrinkle"
     VERSION: ClassVar[Version] = LATEST_VERSION_V5
-
 
     def __init__(
         self,
@@ -62,7 +67,11 @@ class WrinkleData:
             ((2, mean_radial_velocity.shape), (2, mean_radial_velocity_error.shape))
         )
         num_momentum_bins = check_axis_length(
-            ((0, angular_momentum.shape), (0, mean_radial_velocity.shape), (0, mean_radial_velocity_error.shape))
+            (
+                (0, angular_momentum.shape),
+                (0, mean_radial_velocity.shape),
+                (0, mean_radial_velocity_error.shape),
+            )
         )
         match completeness:
             case True:
@@ -84,7 +93,9 @@ class WrinkleData:
         self.angular_momentum: Array1D[np.float64] = angular_momentum
         self.completeness: Array1D[np.bool_] = completeness
         self.mean_radial_velocity: Array3D[np.float64] = mean_radial_velocity
-        self.mean_radial_velocity_error: Array3D[np.float64] = mean_radial_velocity_error
+        self.mean_radial_velocity_error: Array3D[np.float64] = (
+            mean_radial_velocity_error
+        )
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -100,10 +111,20 @@ class WrinkleData:
         equality &= self.name == other.name
         equality &= self.omega == other.omega
         equality &= self.sphere_radius == other.sphere_radius
-        equality &= np.array_equal(self.angular_momentum, other.angular_momentum, equal_nan=True)
-        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
-        equality &= np.array_equal(self.mean_radial_velocity, other.mean_radial_velocity, equal_nan=True)
-        equality &= np.array_equal(self.mean_radial_velocity_error, other.mean_radial_velocity_error, equal_nan=True)
+        equality &= np.array_equal(
+            self.angular_momentum, other.angular_momentum, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.completeness, other.completeness, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.mean_radial_velocity, other.mean_radial_velocity, equal_nan=True
+        )
+        equality &= np.array_equal(
+            self.mean_radial_velocity_error,
+            other.mean_radial_velocity_error,
+            equal_nan=True,
+        )
         return bool(equality)
 
     @classmethod
@@ -114,10 +135,16 @@ class WrinkleData:
         num_locations: int,
         num_momentum_bins: int,
     ) -> Self:
-        angular_momentum: Array1D[np.float64] = np.zeros((num_momentum_bins,), dtype=np.float64)
+        angular_momentum: Array1D[np.float64] = np.zeros(
+            (num_momentum_bins,), dtype=np.float64
+        )
         completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
-        mean_radial_velocity: Array3D[np.float64] = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
-        mean_radial_velocity_error: Array3D[np.float64] = np.zeros((num_momentum_bins, num_frames, num_locations), dtype=np.float64)
+        mean_radial_velocity: Array3D[np.float64] = np.zeros(
+            (num_momentum_bins, num_frames, num_locations), dtype=np.float64
+        )
+        mean_radial_velocity_error: Array3D[np.float64] = np.zeros(
+            (num_momentum_bins, num_frames, num_locations), dtype=np.float64
+        )
         return cls(
             angular_momentum=angular_momentum,
             completeness=completeness,
@@ -136,7 +163,11 @@ class WrinkleData:
             assert file_version.major in _LOADERS
             data = _LOADERS[file_version.major](file)
 
-        log.info("Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully loaded [cyan]%s[/cyan] from [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
         return data
 
     @classmethod
@@ -168,9 +199,17 @@ class WrinkleData:
             file.attrs.create("sphere_radius", self.sphere_radius, dtype=np.float64)
             _ = file.create_dataset("angular_momentum", data=self.angular_momentum)
             _ = file.create_dataset("completeness", data=self.completeness)
-            _ = file.create_dataset("mean_radial_velocity", data=self.mean_radial_velocity)
-            _ = file.create_dataset("mean_radial_velocity_error", data=self.mean_radial_velocity_error)
-        log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
+            _ = file.create_dataset(
+                "mean_radial_velocity", data=self.mean_radial_velocity
+            )
+            _ = file.create_dataset(
+                "mean_radial_velocity_error", data=self.mean_radial_velocity_error
+            )
+        log.info(
+            "Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path.absolute(),
+        )
 
     @classmethod
     def is_compatible(
@@ -187,20 +226,32 @@ class WrinkleData:
     ) -> bool:
         path = path.expanduser()
         if not path.is_file():
-            msg = f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            msg = (
+                f"Can't check compatibility of {cls.__name__} as {path} doesn't exist!"
+            )
             raise ValueError(msg)
 
         cls.migrate(path)
         is_compatible: bool = True
         with Hdf5File(path, "r") as file:
-            is_compatible &= distance_error == get_float_attr_from_hdf5(file, "distance_error")
+            is_compatible &= distance_error == get_float_attr_from_hdf5(
+                file, "distance_error"
+            )
             is_compatible &= max_lz == get_float_attr_from_hdf5(file, "max_lz")
             is_compatible &= min_lz == get_float_attr_from_hdf5(file, "min_lz")
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
             is_compatible &= omega == get_float_attr_from_hdf5(file, "omega")
-            is_compatible &= sphere_radius == get_float_attr_from_hdf5(file, "sphere_radius")
-            file_angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64))
-            is_compatible &= np.array_equal(file_angular_momentum, angular_momentum, equal_nan=True)
+            is_compatible &= sphere_radius == get_float_attr_from_hdf5(
+                file, "sphere_radius"
+            )
+            file_angular_momentum = verify_array_is_1d(
+                read_dataset_from_hdf5_with_dtype(
+                    file, "angular_momentum", dtype=np.float64
+                )
+            )
+            is_compatible &= np.array_equal(
+                file_angular_momentum, angular_momentum, equal_nan=True
+            )
         return is_compatible
 
     @classmethod
@@ -230,9 +281,17 @@ class WrinkleData:
             file.attrs.modify("omega", omega)
             file.attrs.modify("sphere_radius", sphere_radius)
             get_dataset_from_hdf5(file, "angular_momentum").write_direct(
-                np.asarray(angular_momentum, dtype=np.float64).reshape(angular_momentum.shape), np.s_[:], np.s_[:]
+                np.asarray(angular_momentum, dtype=np.float64).reshape(
+                    angular_momentum.shape
+                ),
+                np.s_[:],
+                np.s_[:],
             )
-        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+        log.info(
+            "Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            cls.__name__,
+            path,
+        )
 
     @classmethod
     def save_frame(
@@ -260,12 +319,25 @@ class WrinkleData:
                 np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
             )
             get_dataset_from_hdf5(file, "mean_radial_velocity").write_direct(
-                np.asarray(mean_radial_velocity, dtype=np.float64).reshape((num_momentum_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+                np.asarray(mean_radial_velocity, dtype=np.float64).reshape(
+                    (num_momentum_bins, num_locations)
+                ),
+                np.s_[:, :],
+                np.s_[:, frame, :],
             )
             get_dataset_from_hdf5(file, "mean_radial_velocity_error").write_direct(
-                np.asarray(mean_radial_velocity_error, dtype=np.float64).reshape((num_momentum_bins, num_locations)), np.s_[:, :], np.s_[:, frame, :]
+                np.asarray(mean_radial_velocity_error, dtype=np.float64).reshape(
+                    (num_momentum_bins, num_locations)
+                ),
+                np.s_[:, :],
+                np.s_[:, frame, :],
             )
-        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
+        log.info(
+            "Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]",
+            frame,
+            cls.__name__,
+            path,
+        )
 
 
 def load_v3(file: Hdf5File) -> WrinkleData:
@@ -275,9 +347,19 @@ def load_v3(file: Hdf5File) -> WrinkleData:
     min_lz = get_float_attr_from_hdf5(file, "min_lz")
     name = get_str_attr_from_hdf5(file, "name")
     sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
-    angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float32))
-    mean_radial_velocity = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float32))
-    mean_radial_velocity_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float32))
+    angular_momentum = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float32)
+    )
+    mean_radial_velocity = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity", dtype=np.float32
+        )
+    )
+    mean_radial_velocity_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity_error", dtype=np.float32
+        )
+    )
 
     return cls(
         distance_error=distance_error,
@@ -298,10 +380,22 @@ def load_v4(file: Hdf5File) -> WrinkleData:
     min_lz = get_float_attr_from_hdf5(file, "min_lz")
     name = get_str_attr_from_hdf5(file, "name")
     sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
-    angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64))
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mean_radial_velocity = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float64))
-    mean_radial_velocity_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float64))
+    angular_momentum = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64)
+    )
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mean_radial_velocity = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity", dtype=np.float64
+        )
+    )
+    mean_radial_velocity_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity_error", dtype=np.float64
+        )
+    )
 
     return cls(
         distance_error=distance_error,
@@ -324,10 +418,22 @@ def load_v5(file: Hdf5File) -> WrinkleData:
     name = get_str_attr_from_hdf5(file, "name")
     omega = get_float_attr_from_hdf5(file, "omega")
     sphere_radius = get_float_attr_from_hdf5(file, "sphere_radius")
-    angular_momentum = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64))
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    mean_radial_velocity = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity", dtype=np.float64))
-    mean_radial_velocity_error = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "mean_radial_velocity_error", dtype=np.float64))
+    angular_momentum = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "angular_momentum", dtype=np.float64)
+    )
+    completeness = verify_array_is_1d(
+        read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_)
+    )
+    mean_radial_velocity = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity", dtype=np.float64
+        )
+    )
+    mean_radial_velocity_error = verify_array_is_3d(
+        read_dataset_from_hdf5_with_dtype(
+            file, "mean_radial_velocity_error", dtype=np.float64
+        )
+    )
 
     return cls(
         distance_error=distance_error,
@@ -348,5 +454,3 @@ _LOADERS: Mapping[int, _WrinkleDataLoader] = {
     4: load_v4,
     5: load_v5,
 }
-
-

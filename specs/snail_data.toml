@@ -41,7 +41,7 @@ omega = { dtype = "f64", default = "0.0" }
 [versions.7-0-0]
 [versions.7-0-0.attrs]
 [versions.7-0-0.datasets]
-azimuthal_velocity_error = { dtype = "f64", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)" }
-radial_velocity_error = { dtype = "f64", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)" }
+azimuthal_velocity_error = { dtype = "f64", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)", default = "zero" }
+radial_velocity_error = { dtype = "f64", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)", default = "zero" }
 
 [versions.7-0-0.fields]

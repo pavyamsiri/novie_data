@@ -46,29 +46,37 @@ class SnailData:
         self,
         *,
         azimuthal_velocity: Array4D[np.float64],
-        azimuthal_velocity_error: Array4D[np.float64],
         radial_velocity: Array4D[np.float64],
-        radial_velocity_error: Array4D[np.float64],
         surface_density: Array4D[np.float64],
+        azimuthal_velocity_error: Array4D[np.float64] | bool = False,
         completeness: Array1D[np.bool_] | bool = True,
         max_height: float = 1,
         max_velocity: float = 60,
         name: str = "UNKNOWN",
         omega: float = 0,
+        radial_velocity_error: Array4D[np.float64] | bool = False,
         sphere_radius: float = 2,
     ) -> None:
         num_frames = check_axis_length(
-            ((2, azimuthal_velocity.shape), (2, azimuthal_velocity_error.shape), (2, radial_velocity.shape), (2, radial_velocity_error.shape), (2, surface_density.shape))
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
         )
         num_height_bins = check_axis_length(
-            ((1, azimuthal_velocity.shape), (1, azimuthal_velocity_error.shape), (1, radial_velocity.shape), (1, radial_velocity_error.shape), (1, surface_density.shape))
+            ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
         )
         num_locations = check_axis_length(
-            ((3, azimuthal_velocity.shape), (3, azimuthal_velocity_error.shape), (3, radial_velocity.shape), (3, radial_velocity_error.shape), (3, surface_density.shape))
+            ((3, azimuthal_velocity.shape), (3, radial_velocity.shape), (3, surface_density.shape))
         )
         num_velocity_bins = check_axis_length(
-            ((0, azimuthal_velocity.shape), (0, azimuthal_velocity_error.shape), (0, radial_velocity.shape), (0, radial_velocity_error.shape), (0, surface_density.shape))
+            ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
         )
+        match azimuthal_velocity_error:
+            case True:
+                azimuthal_velocity_error = np.ones((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+            case False:
+                azimuthal_velocity_error = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+            case _:
+                pass
+        assert azimuthal_velocity_error is not bool
         match completeness:
             case True:
                 completeness = np.ones((num_frames,), dtype=np.bool_)
@@ -77,6 +85,14 @@ class SnailData:
             case _:
                 pass
         assert completeness is not bool
+        match radial_velocity_error:
+            case True:
+                radial_velocity_error = np.ones((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+            case False:
+                radial_velocity_error = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float64)
+            case _:
+                pass
+        assert radial_velocity_error is not bool
         self.num_frames: int = num_frames
         self.num_height_bins: int = num_height_bins
         self.num_locations: int = num_locations
@@ -256,13 +272,13 @@ class SnailData:
             raise ValueError(msg)
 
         num_height_bins = check_axis_length(
-            ((1, azimuthal_velocity.shape), (1, azimuthal_velocity_error.shape), (1, radial_velocity.shape), (1, radial_velocity_error.shape), (1, surface_density.shape))
+            ((1, azimuthal_velocity.shape), (1, radial_velocity.shape), (1, surface_density.shape))
         )
         num_locations = check_axis_length(
-            ((2, azimuthal_velocity.shape), (2, azimuthal_velocity_error.shape), (2, radial_velocity.shape), (2, radial_velocity_error.shape), (2, surface_density.shape))
+            ((2, azimuthal_velocity.shape), (2, radial_velocity.shape), (2, surface_density.shape))
         )
         num_velocity_bins = check_axis_length(
-            ((0, azimuthal_velocity.shape), (0, azimuthal_velocity_error.shape), (0, radial_velocity.shape), (0, radial_velocity_error.shape), (0, surface_density.shape))
+            ((0, azimuthal_velocity.shape), (0, radial_velocity.shape), (0, surface_density.shape))
         )
         cls.migrate(path)
         with Hdf5File(path, "a") as file:

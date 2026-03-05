@@ -1,5 +1,6 @@
 """Module contains every novie data class definition."""
 
+from .alinder_data import AlinderData
 from .arm_coverage_data import SpiralArmCoverageData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
@@ -15,6 +16,7 @@ from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
 
 __all__ = [
+    "AlinderData",
     "CorrugationData",
     "CorrugationResidualsData",
     "GridData",
@@ -30,4 +32,4 @@ __all__ = [
     "WrinkleResidualsData",
 ]
 
-__version__: str = "5.0.0"
+__version__: str = "6.0.0"

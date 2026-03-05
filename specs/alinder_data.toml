@@ -1,0 +1,21 @@
+[general]
+name = "Alinder"
+
+[versions.1-0-0]
+[versions.1-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+
+[versions.1-0-0.datasets]
+alpha = { dtype = "f32", shape = "(num_frames, num_locations)" }
+b = { dtype = "f32", shape = "(num_frames, num_locations)" }
+c = { dtype = "f32", shape = "(num_frames, num_locations)" }
+theta0 = { dtype = "f32", shape = "(num_frames, num_locations)" }
+scale_factor = { dtype = "f32", shape = "(num_frames, num_locations)" }
+rho = { dtype = "f32", shape = "(num_frames, num_locations)" }
+background = { dtype = "f32", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)" }
+
+[versions.1-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_velocity_bins = { type = "int", value = "num_velocity_bins" }
+num_height_bins = { type = "int", value = "num_height_bins" }
+num_locations = { type = "int", value = "num_locations" }

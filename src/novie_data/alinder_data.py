@@ -7,9 +7,11 @@ import numpy as np
 from h5py import File as Hdf5File
 from novie_helpers import (
     check_axis_length,
+    get_dataset_from_hdf5,
     get_file_version,
     get_str_attr_from_hdf5,
     read_dataset_from_hdf5_with_dtype,
+    verify_array_is_1d,
     verify_array_is_2d,
     verify_array_is_4d,
 )
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from novie_helpers import Array2D, Array4D
+    from novie_helpers import Array1D, Array2D, Array3D, Array4D
 
 
 LATEST_VERSION_V1 = Version("1.0.0")
@@ -47,6 +49,7 @@ class AlinderData:
         rho: Array2D[np.float32],
         scale_factor: Array2D[np.float32],
         theta0: Array2D[np.float32],
+        completeness: Array1D[np.bool_] | bool = True,
         name: str = "UNKNOWN",
     ) -> None:
         num_frames = check_axis_length(
@@ -61,6 +64,14 @@ class AlinderData:
         num_velocity_bins = check_axis_length(
             ((0, background.shape),)
         )
+        match completeness:
+            case True:
+                completeness = np.ones((num_frames,), dtype=np.bool_)
+            case False:
+                completeness = np.zeros((num_frames,), dtype=np.bool_)
+            case _:
+                pass
+        assert completeness is not bool
         self.num_frames: int = num_frames
         self.num_height_bins: int = num_height_bins
         self.num_locations: int = num_locations
@@ -70,6 +81,7 @@ class AlinderData:
         self.b: Array2D[np.float32] = b
         self.background: Array4D[np.float32] = background
         self.c: Array2D[np.float32] = c
+        self.completeness: Array1D[np.bool_] = completeness
         self.rho: Array2D[np.float32] = rho
         self.scale_factor: Array2D[np.float32] = scale_factor
         self.theta0: Array2D[np.float32] = theta0
@@ -88,6 +100,7 @@ class AlinderData:
         equality &= np.array_equal(self.b, other.b, equal_nan=True)
         equality &= np.array_equal(self.background, other.background, equal_nan=True)
         equality &= np.array_equal(self.c, other.c, equal_nan=True)
+        equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
         equality &= np.array_equal(self.rho, other.rho, equal_nan=True)
         equality &= np.array_equal(self.scale_factor, other.scale_factor, equal_nan=True)
         equality &= np.array_equal(self.theta0, other.theta0, equal_nan=True)
@@ -106,6 +119,7 @@ class AlinderData:
         b: Array2D[np.float32] = np.zeros((num_frames, num_locations), dtype=np.float32)
         background: Array4D[np.float32] = np.zeros((num_velocity_bins, num_height_bins, num_frames, num_locations), dtype=np.float32)
         c: Array2D[np.float32] = np.zeros((num_frames, num_locations), dtype=np.float32)
+        completeness: Array1D[np.bool_] = np.zeros((num_frames,), dtype=np.bool_)
         rho: Array2D[np.float32] = np.zeros((num_frames, num_locations), dtype=np.float32)
         scale_factor: Array2D[np.float32] = np.zeros((num_frames, num_locations), dtype=np.float32)
         theta0: Array2D[np.float32] = np.zeros((num_frames, num_locations), dtype=np.float32)
@@ -114,6 +128,7 @@ class AlinderData:
             b=b,
             background=background,
             c=c,
+            completeness=completeness,
             rho=rho,
             scale_factor=scale_factor,
             theta0=theta0,
@@ -159,6 +174,7 @@ class AlinderData:
             _ = file.create_dataset("b", data=self.b)
             _ = file.create_dataset("background", data=self.background)
             _ = file.create_dataset("c", data=self.c)
+            _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("rho", data=self.rho)
             _ = file.create_dataset("scale_factor", data=self.scale_factor)
             _ = file.create_dataset("theta0", data=self.theta0)
@@ -177,7 +193,73 @@ class AlinderData:
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
         return is_compatible
 
+    @classmethod
+    def save_init(cls, path: Path, *, name: str) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
 
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            file.attrs.modify("name", name)
+        log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
+
+    @classmethod
+    def save_frame(
+        cls,
+        path: Path,
+        frame: int,
+        *,
+        alpha: Array1D[np.float32],
+        b: Array1D[np.float32],
+        background: Array3D[np.float32],
+        c: Array1D[np.float32],
+        rho: Array1D[np.float32],
+        scale_factor: Array1D[np.float32],
+        theta0: Array1D[np.float32],
+    ) -> None:
+        path = path.expanduser()
+        if not path.is_file():
+            msg = f"Can't save initial data to {cls.__name__} as {path} doesn't exist!"
+            raise ValueError(msg)
+
+        num_height_bins = check_axis_length(
+            ((1, background.shape),)
+        )
+        num_locations = check_axis_length(
+            ((0, alpha.shape), (0, b.shape), (2, background.shape), (0, c.shape), (0, rho.shape), (0, scale_factor.shape), (0, theta0.shape))
+        )
+        num_velocity_bins = check_axis_length(
+            ((0, background.shape),)
+        )
+        cls.migrate(path)
+        with Hdf5File(path, "a") as file:
+            get_dataset_from_hdf5(file, "alpha").write_direct(
+                np.asarray(alpha, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+            get_dataset_from_hdf5(file, "b").write_direct(
+                np.asarray(b, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+            get_dataset_from_hdf5(file, "background").write_direct(
+                np.asarray(background, dtype=np.float32).reshape((num_velocity_bins, num_height_bins, num_locations)), np.s_[:, :, :], np.s_[:, :, frame, :]
+            )
+            get_dataset_from_hdf5(file, "c").write_direct(
+                np.asarray(c, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+            get_dataset_from_hdf5(file, "completeness").write_direct(
+                np.asarray(True, dtype=np.bool_).reshape(1), np.s_[0], np.s_[frame]
+            )
+            get_dataset_from_hdf5(file, "rho").write_direct(
+                np.asarray(rho, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+            get_dataset_from_hdf5(file, "scale_factor").write_direct(
+                np.asarray(scale_factor, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+            get_dataset_from_hdf5(file, "theta0").write_direct(
+                np.asarray(theta0, dtype=np.float32).reshape((num_locations,)), np.s_[:], np.s_[frame, :]
+            )
+        log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
 
 def load_v1(file: Hdf5File) -> AlinderData:
@@ -187,6 +269,7 @@ def load_v1(file: Hdf5File) -> AlinderData:
     b = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "b", dtype=np.float32))
     background = verify_array_is_4d(read_dataset_from_hdf5_with_dtype(file, "background", dtype=np.float32))
     c = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "c", dtype=np.float32))
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
     rho = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "rho", dtype=np.float32))
     scale_factor = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "scale_factor", dtype=np.float32))
     theta0 = verify_array_is_2d(read_dataset_from_hdf5_with_dtype(file, "theta0", dtype=np.float32))
@@ -197,6 +280,7 @@ def load_v1(file: Hdf5File) -> AlinderData:
         b=b,
         background=background,
         c=c,
+        completeness=completeness,
         rho=rho,
         scale_factor=scale_factor,
         theta0=theta0,

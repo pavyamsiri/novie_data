@@ -13,6 +13,7 @@ theta0 = { dtype = "f32", shape = "(num_frames, num_locations)" }
 scale_factor = { dtype = "f32", shape = "(num_frames, num_locations)" }
 rho = { dtype = "f32", shape = "(num_frames, num_locations)" }
 background = { dtype = "f32", shape = "(num_velocity_bins, num_height_bins, num_frames, num_locations)" }
+completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
 
 [versions.1-0-0.fields]
 num_frames = { type = "int", value = "num_frames" }

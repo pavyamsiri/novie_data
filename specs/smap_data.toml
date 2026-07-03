@@ -1,0 +1,16 @@
+[general]
+name = "Smap"
+
+[versions.1-0-0]
+[versions.1-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+extent = { dtype = "f64", default = "1.0" }
+
+[versions.1-0-0.datasets]
+mean_nu = { dtype = "f32", shape = "(num_frames,)" }
+completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
+
+[versions.1-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_bins = { type = "int", value = "num_bins" }
+

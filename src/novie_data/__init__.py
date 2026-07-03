@@ -8,6 +8,7 @@ from .grid_data import GridData
 from .interface import NovieData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
+from .smap_data import SmapData
 from .snail_data import SnailData
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
@@ -23,6 +24,7 @@ __all__ = [
     "NovieData",
     "PerturberData",
     "RidgeData",
+    "SmapData",
     "SnailData",
     "SnapshotData",
     "SolarCircleData",

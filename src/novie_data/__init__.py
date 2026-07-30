@@ -12,6 +12,7 @@ from .smap_data import SmapData
 from .snail_data import SnailData
 from .snapshot_data import SnapshotData
 from .solar_circle_data import SolarCircleData
+from .squash_data import SquashData
 from .velocity_grid import VelocityGridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
@@ -29,9 +30,10 @@ __all__ = [
     "SnapshotData",
     "SolarCircleData",
     "SpiralArmCoverageData",
+    "SquashData",
     "VelocityGridData",
     "WrinkleData",
     "WrinkleResidualsData",
 ]
 
-__version__: str = "6.0.0"
+__version__: str = "7.0.0"

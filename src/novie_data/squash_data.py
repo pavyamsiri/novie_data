@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
 
 LATEST_VERSION_V1 = Version("1.0.0")
-LATEST_VERSION_V2 = Version("2.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ class _SquashDataLoader(Protocol):
 
 class SquashData:
     DATA_FILE_TYPE: ClassVar[str] = "Squash"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V2
+    VERSION: ClassVar[Version] = LATEST_VERSION_V1
 
 
     def __init__(
@@ -52,8 +51,9 @@ class SquashData:
         stdz_xy: Array3D[np.float64],
         completeness: Array1D[np.bool_] | bool = True,
         extent: float = 25,
-        max_jz: float = 6,
-        min_jz: float = 4,
+        jz_cutoff: float = 1,
+        jz_threshold: float = 2.5,
+        min_rxy: float = 2,
         name: str = "UNKNOWN",
     ) -> None:
         num_bins = check_axis_length(
@@ -73,8 +73,9 @@ class SquashData:
         self.num_bins: int = num_bins
         self.num_frames: int = num_frames
         self.extent: float = extent
-        self.max_jz: float = max_jz
-        self.min_jz: float = min_jz
+        self.jz_cutoff: float = jz_cutoff
+        self.jz_threshold: float = jz_threshold
+        self.min_rxy: float = min_rxy
         self.name: str = name
         self.completeness: Array1D[np.bool_] = completeness
         self.jphi_xy: Array3D[np.float64] = jphi_xy
@@ -93,8 +94,9 @@ class SquashData:
         equality &= self.num_bins == other.num_bins
         equality &= self.num_frames == other.num_frames
         equality &= self.extent == other.extent
-        equality &= self.max_jz == other.max_jz
-        equality &= self.min_jz == other.min_jz
+        equality &= self.jz_cutoff == other.jz_cutoff
+        equality &= self.jz_threshold == other.jz_threshold
+        equality &= self.min_rxy == other.min_rxy
         equality &= self.name == other.name
         equality &= np.array_equal(self.completeness, other.completeness, equal_nan=True)
         equality &= np.array_equal(self.jphi_xy, other.jphi_xy, equal_nan=True)
@@ -148,7 +150,7 @@ class SquashData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V2:
+            if file_version == LATEST_VERSION_V1:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -163,8 +165,9 @@ class SquashData:
             file.attrs.create("type", str(cls.DATA_FILE_TYPE))
             file.attrs.create("version", str(cls.VERSION))
             file.attrs.create("extent", self.extent, dtype=np.float64)
-            file.attrs.create("max_jz", self.max_jz, dtype=np.float64)
-            file.attrs.create("min_jz", self.min_jz, dtype=np.float64)
+            file.attrs.create("jz_cutoff", self.jz_cutoff, dtype=np.float64)
+            file.attrs.create("jz_threshold", self.jz_threshold, dtype=np.float64)
+            file.attrs.create("min_rxy", self.min_rxy, dtype=np.float64)
             file.attrs.create("name", str(self.name))
             _ = file.create_dataset("completeness", data=self.completeness)
             _ = file.create_dataset("jphi_xy", data=self.jphi_xy)
@@ -182,8 +185,9 @@ class SquashData:
         path: Path,
         *,
         extent: float,
-        max_jz: float,
-        min_jz: float,
+        jz_cutoff: float,
+        jz_threshold: float,
+        min_rxy: float,
         name: str,
     ) -> bool:
         path = path.expanduser()
@@ -195,8 +199,9 @@ class SquashData:
         is_compatible: bool = True
         with Hdf5File(path, "r") as file:
             is_compatible &= extent == get_float_attr_from_hdf5(file, "extent")
-            is_compatible &= max_jz == get_float_attr_from_hdf5(file, "max_jz")
-            is_compatible &= min_jz == get_float_attr_from_hdf5(file, "min_jz")
+            is_compatible &= jz_cutoff == get_float_attr_from_hdf5(file, "jz_cutoff")
+            is_compatible &= jz_threshold == get_float_attr_from_hdf5(file, "jz_threshold")
+            is_compatible &= min_rxy == get_float_attr_from_hdf5(file, "min_rxy")
             is_compatible &= name == get_str_attr_from_hdf5(file, "name")
         return is_compatible
 
@@ -206,8 +211,9 @@ class SquashData:
         path: Path,
         *,
         extent: float,
-        max_jz: float,
-        min_jz: float,
+        jz_cutoff: float,
+        jz_threshold: float,
+        min_rxy: float,
         name: str,
     ) -> None:
         path = path.expanduser()
@@ -218,8 +224,9 @@ class SquashData:
         cls.migrate(path)
         with Hdf5File(path, "a") as file:
             file.attrs.modify("extent", extent)
-            file.attrs.modify("max_jz", max_jz)
-            file.attrs.modify("min_jz", min_jz)
+            file.attrs.modify("jz_cutoff", jz_cutoff)
+            file.attrs.modify("jz_threshold", jz_threshold)
+            file.attrs.modify("min_rxy", min_rxy)
             file.attrs.modify("name", name)
         log.info("Successfully saved attributes of [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path)
 
@@ -277,37 +284,9 @@ class SquashData:
 def load_v1(file: Hdf5File) -> SquashData:
     cls = SquashData
     extent = get_float_attr_from_hdf5(file, "extent")
-    max_jz = get_float_attr_from_hdf5(file, "max_jz")
-    min_jz = get_float_attr_from_hdf5(file, "min_jz")
-    name = get_str_attr_from_hdf5(file, "name")
-    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
-    jphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jphi_xy", dtype=np.float64))
-    jr_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jr_xy", dtype=np.float64))
-    jz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jz_xy", dtype=np.float64))
-    omegaphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegaphi_xy", dtype=np.float64))
-    omegar_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegar_xy", dtype=np.float64))
-    omegaz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegaz_xy", dtype=np.float64))
-
-    return cls(
-        extent=extent,
-        max_jz=max_jz,
-        min_jz=min_jz,
-        name=name,
-        completeness=completeness,
-        jphi_xy=jphi_xy,
-        jr_xy=jr_xy,
-        jz_xy=jz_xy,
-        omegaphi_xy=omegaphi_xy,
-        omegar_xy=omegar_xy,
-        omegaz_xy=omegaz_xy,
-    )
-
-
-def load_v2(file: Hdf5File) -> SquashData:
-    cls = SquashData
-    extent = get_float_attr_from_hdf5(file, "extent")
-    max_jz = get_float_attr_from_hdf5(file, "max_jz")
-    min_jz = get_float_attr_from_hdf5(file, "min_jz")
+    jz_cutoff = get_float_attr_from_hdf5(file, "jz_cutoff")
+    jz_threshold = get_float_attr_from_hdf5(file, "jz_threshold")
+    min_rxy = get_float_attr_from_hdf5(file, "min_rxy")
     name = get_str_attr_from_hdf5(file, "name")
     completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
     jphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jphi_xy", dtype=np.float64))
@@ -320,8 +299,9 @@ def load_v2(file: Hdf5File) -> SquashData:
 
     return cls(
         extent=extent,
-        max_jz=max_jz,
-        min_jz=min_jz,
+        jz_cutoff=jz_cutoff,
+        jz_threshold=jz_threshold,
+        min_rxy=min_rxy,
         name=name,
         completeness=completeness,
         jphi_xy=jphi_xy,
@@ -336,7 +316,6 @@ def load_v2(file: Hdf5File) -> SquashData:
 
 _LOADERS: Mapping[int, _SquashDataLoader] = {
     1: load_v1,
-    2: load_v2,
 }
 
 

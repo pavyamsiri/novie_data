@@ -5,8 +5,9 @@ name = "Squash"
 [versions.1-0-0.attrs]
 name = { dtype = "str", default = "UNKNOWN" }
 extent = { dtype = "f64", default = "25.0" }
-min_jz = { dtype = "f64", default = "4.0" }
-max_jz = { dtype = "f64", default = "6.0" }
+jz_threshold = { dtype = "f64", default = "2.5" }
+jz_cutoff = { dtype = "f64", default = "1.0" }
+min_rxy = { dtype = "f64", default = "2.0" }
 
 [versions.1-0-0.datasets]
 omegar_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
@@ -15,15 +16,9 @@ omegaz_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
 jr_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
 jphi_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
 jz_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
+stdz_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
 completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
 
 [versions.1-0-0.fields]
 num_frames = { type = "int", value = "num_frames" }
 num_bins = { type = "int", value = "num_bins" }
-
-[versions.2-0-0]
-[versions.2-0-0.attrs]
-[versions.2-0-0.datasets]
-stdz_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)" }
-
-[versions.2-0-0.fields]

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 
 LATEST_VERSION_V1 = Version("1.0.0")
+LATEST_VERSION_V2 = Version("2.0.0")
 
 
 log: logging.Logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class _SquashDataLoader(Protocol):
 
 class SquashData:
     DATA_FILE_TYPE: ClassVar[str] = "Squash"
-    VERSION: ClassVar[Version] = LATEST_VERSION_V1
+    VERSION: ClassVar[Version] = LATEST_VERSION_V2
 
 
     def __init__(
@@ -55,6 +56,7 @@ class SquashData:
         jz_threshold: float = 2.5,
         min_rxy: float = 2,
         name: str = "UNKNOWN",
+        z_xy: Array3D[np.float64] | bool = False,
     ) -> None:
         num_bins = check_axis_length(
             ((0, jphi_xy.shape), (1, jphi_xy.shape), (0, jr_xy.shape), (1, jr_xy.shape), (0, jz_xy.shape), (1, jz_xy.shape), (0, omegaphi_xy.shape), (1, omegaphi_xy.shape), (0, omegar_xy.shape), (1, omegar_xy.shape), (0, omegaz_xy.shape), (1, omegaz_xy.shape), (0, stdz_xy.shape), (1, stdz_xy.shape))
@@ -70,6 +72,14 @@ class SquashData:
             case _:
                 pass
         assert completeness is not bool
+        match z_xy:
+            case True:
+                z_xy = np.ones((num_bins, num_bins, num_frames), dtype=np.float64)
+            case False:
+                z_xy = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+            case _:
+                pass
+        assert z_xy is not bool
         self.num_bins: int = num_bins
         self.num_frames: int = num_frames
         self.extent: float = extent
@@ -85,6 +95,7 @@ class SquashData:
         self.omegar_xy: Array3D[np.float64] = omegar_xy
         self.omegaz_xy: Array3D[np.float64] = omegaz_xy
         self.stdz_xy: Array3D[np.float64] = stdz_xy
+        self.z_xy: Array3D[np.float64] = z_xy
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -106,6 +117,7 @@ class SquashData:
         equality &= np.array_equal(self.omegar_xy, other.omegar_xy, equal_nan=True)
         equality &= np.array_equal(self.omegaz_xy, other.omegaz_xy, equal_nan=True)
         equality &= np.array_equal(self.stdz_xy, other.stdz_xy, equal_nan=True)
+        equality &= np.array_equal(self.z_xy, other.z_xy, equal_nan=True)
         return bool(equality)
 
     @classmethod
@@ -118,6 +130,7 @@ class SquashData:
         omegar_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         omegaz_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         stdz_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
+        z_xy: Array3D[np.float64] = np.zeros((num_bins, num_bins, num_frames), dtype=np.float64)
         return cls(
             completeness=completeness,
             jphi_xy=jphi_xy,
@@ -127,6 +140,7 @@ class SquashData:
             omegar_xy=omegar_xy,
             omegaz_xy=omegaz_xy,
             stdz_xy=stdz_xy,
+            z_xy=z_xy,
         )
 
     @staticmethod
@@ -150,7 +164,7 @@ class SquashData:
             assert str(file.attrs["type"]) == cls.DATA_FILE_TYPE
 
             file_version = get_file_version(file)
-            if file_version == LATEST_VERSION_V1:
+            if file_version == LATEST_VERSION_V2:
                 return
             file_version = get_file_version(file)
             assert file_version.major in _LOADERS
@@ -177,6 +191,7 @@ class SquashData:
             _ = file.create_dataset("omegar_xy", data=self.omegar_xy)
             _ = file.create_dataset("omegaz_xy", data=self.omegaz_xy)
             _ = file.create_dataset("stdz_xy", data=self.stdz_xy)
+            _ = file.create_dataset("z_xy", data=self.z_xy)
         log.info("Successfully dumped [cyan]%s[/cyan] to [magenta]%s[/magenta]", cls.__name__, path.absolute())
 
     @classmethod
@@ -243,6 +258,7 @@ class SquashData:
         omegar_xy: Array2D[np.float64],
         omegaz_xy: Array2D[np.float64],
         stdz_xy: Array2D[np.float64],
+        z_xy: Array2D[np.float64],
     ) -> None:
         path = path.expanduser()
         if not path.is_file():
@@ -277,6 +293,9 @@ class SquashData:
             )
             get_dataset_from_hdf5(file, "stdz_xy").write_direct(
                 np.asarray(stdz_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
+            )
+            get_dataset_from_hdf5(file, "z_xy").write_direct(
+                np.asarray(z_xy, dtype=np.float64).reshape((num_bins, num_bins)), np.s_[:, :], np.s_[:, :, frame]
             )
         log.info("Successfully saved frame %d of [cyan]%s[/cyan] to [magenta]%s[/magenta]", frame, cls.__name__, path)
 
@@ -314,8 +333,44 @@ def load_v1(file: Hdf5File) -> SquashData:
     )
 
 
+def load_v2(file: Hdf5File) -> SquashData:
+    cls = SquashData
+    extent = get_float_attr_from_hdf5(file, "extent")
+    jz_cutoff = get_float_attr_from_hdf5(file, "jz_cutoff")
+    jz_threshold = get_float_attr_from_hdf5(file, "jz_threshold")
+    min_rxy = get_float_attr_from_hdf5(file, "min_rxy")
+    name = get_str_attr_from_hdf5(file, "name")
+    completeness = verify_array_is_1d(read_dataset_from_hdf5_with_dtype(file, "completeness", dtype=np.bool_))
+    jphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jphi_xy", dtype=np.float64))
+    jr_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jr_xy", dtype=np.float64))
+    jz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "jz_xy", dtype=np.float64))
+    omegaphi_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegaphi_xy", dtype=np.float64))
+    omegar_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegar_xy", dtype=np.float64))
+    omegaz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "omegaz_xy", dtype=np.float64))
+    stdz_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "stdz_xy", dtype=np.float64))
+    z_xy = verify_array_is_3d(read_dataset_from_hdf5_with_dtype(file, "z_xy", dtype=np.float64))
+
+    return cls(
+        extent=extent,
+        jz_cutoff=jz_cutoff,
+        jz_threshold=jz_threshold,
+        min_rxy=min_rxy,
+        name=name,
+        completeness=completeness,
+        jphi_xy=jphi_xy,
+        jr_xy=jr_xy,
+        jz_xy=jz_xy,
+        omegaphi_xy=omegaphi_xy,
+        omegar_xy=omegar_xy,
+        omegaz_xy=omegaz_xy,
+        stdz_xy=stdz_xy,
+        z_xy=z_xy,
+    )
+
+
 _LOADERS: Mapping[int, _SquashDataLoader] = {
     1: load_v1,
+    2: load_v2,
 }
 
 

@@ -22,3 +22,12 @@ completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
 [versions.1-0-0.fields]
 num_frames = { type = "int", value = "num_frames" }
 num_bins = { type = "int", value = "num_bins" }
+
+
+[versions.2-0-0]
+[versions.2-0-0.attrs]
+
+[versions.2-0-0.datasets]
+z_xy = { dtype = "f64", shape = "(num_bins, num_bins, num_frames)", default = "zero" }
+
+[versions.2-0-0.fields]

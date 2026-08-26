@@ -11,6 +11,7 @@ z_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
 stdz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
 vz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
 stdvz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
+completeness = { dtype = "b8", shape = "(num_frames,)", default = "one" }
 
 [versions.1-0-0.fields]
 num_frames = { type = "int", value = "num_frames" }

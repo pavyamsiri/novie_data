@@ -1,0 +1,18 @@
+[general]
+name = "Height"
+
+[versions.1-0-0]
+[versions.1-0-0.attrs]
+name = { dtype = "str", default = "UNKNOWN" }
+extent = { dtype = "f64", default = "1.0" }
+
+[versions.1-0-0.datasets]
+z_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
+stdz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
+vz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
+stdvz_xy = { dtype = "f32", shape = "(num_bins, num_bins, num_frames)" }
+
+[versions.1-0-0.fields]
+num_frames = { type = "int", value = "num_frames" }
+num_bins = { type = "int", value = "num_bins" }
+

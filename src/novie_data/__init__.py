@@ -5,6 +5,7 @@ from .arm_coverage_data import SpiralArmCoverageData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
 from .grid_data import GridData
+from .height_data import HeightData
 from .interface import NovieData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
@@ -22,6 +23,7 @@ __all__ = [
     "CorrugationData",
     "CorrugationResidualsData",
     "GridData",
+    "HeightData",
     "NovieData",
     "PerturberData",
     "RidgeData",
@@ -36,4 +38,4 @@ __all__ = [
     "WrinkleResidualsData",
 ]
 
-__version__: str = "7.0.0"
+__version__: str = "8.0.0"

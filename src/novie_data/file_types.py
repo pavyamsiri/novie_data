@@ -6,16 +6,20 @@ from typing import TYPE_CHECKING
 
 from h5py import File as Hdf5File
 
-from novie_data.snapshot_data import SnapshotData
-from novie_data.solar_circle_data import SolarCircleData
-
+from .alinder_data import AlinderData
 from .arm_coverage_data import SpiralArmCoverageData
 from .corrugation_data import CorrugationData
 from .corrugation_residuals_data import CorrugationResidualsData
 from .grid_data import GridData
+from .height_data import HeightData
+from .interface import NovieData
 from .perturber_data import PerturberData
 from .ridge_data import RidgeData
+from .smap_data import SmapData
 from .snail_data import SnailData
+from .snapshot_data import SnapshotData
+from .solar_circle_data import SolarCircleData
+from .squash_data import SquashData
 from .velocity_grid import VelocityGridData
 from .wrinkle_data import WrinkleData
 from .wrinkle_residuals_data import WrinkleResidualsData
@@ -56,6 +60,10 @@ def get_novie_type(input_path: Path) -> type[NovieData]:
         SnapshotData,
         SolarCircleData,
         VelocityGridData,
+        SquashData,
+        HeightData,
+        AlinderData,
+        SmapData,
     ]
 
     with Hdf5File(input_path, "r") as file:
